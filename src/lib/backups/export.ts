@@ -4,7 +4,7 @@ import type { BackupTableGroupId, DatabaseBackupDocument, DatabaseBackupTable, D
 import { mergeLegacyMessageBodies } from "./utils";
 import { BACKUP_TABLE_GROUPS, getSelectedBackupTables } from "./table-groups";
 
-export const BACKUP_TABLES: DatabaseBackupTable[] = ["users", "user_compose_preferences", "domains", "domain_tracking_hosts", "mailboxes", "mailbox_access", "contacts", "folders", "api_keys", "messages", "message_attachments", "shared_attachment_links", "outbound_jobs", "message_tracking", "message_opens", "follow_ups", "routing_rules", "webhooks", "webhook_deliveries", "sessions", "audit_logs", "backup_settings", "backups", "app_settings", "license_settings", "email_templates", "calendar_events", "booking_events", "auto_reply_deliveries", "spam_token_stats", "spam_reputation", "spam_feedback", "mailbox_aliases", "password_reset_tokens", "mfa_recovery_codes", "login_challenges", "passkey_credentials", "mailbox_agent_settings", "agent_conversations", "agent_chat_messages", "agent_jobs", "agent_draft_metadata", "agent_send_approvals", "mcp_key_mailboxes", "ai_usage", "drive_items", "drive_upload_parts", "drive_shares"];
+export const BACKUP_TABLES: DatabaseBackupTable[] = ["users", "user_compose_preferences", "domains", "domain_tracking_hosts", "mailboxes", "mailbox_access", "contacts", "folders", "api_keys", "messages", "message_attachments", "shared_attachment_links", "outbound_jobs", "message_tracking", "message_opens", "follow_ups", "routing_rules", "webhooks", "webhook_deliveries", "sessions", "audit_logs", "backup_settings", "backups", "app_settings", "email_templates", "calendar_events", "booking_events", "auto_reply_deliveries", "spam_token_stats", "spam_reputation", "spam_feedback", "mailbox_aliases", "password_reset_tokens", "mfa_recovery_codes", "login_challenges", "passkey_credentials", "mailbox_agent_settings", "agent_conversations", "agent_chat_messages", "agent_jobs", "agent_draft_metadata", "agent_send_approvals", "mcp_key_mailboxes", "ai_usage", "drive_items", "drive_upload_parts", "drive_shares"];
 /**
  * Tables every backup document must contain. Tables added to BACKUP_TABLES
  * after the format shipped are absent from older documents, so they stay
@@ -12,7 +12,8 @@ export const BACKUP_TABLES: DatabaseBackupTable[] = ["users", "user_compose_pref
  */
 /** Added by migrations 0068 and later; databases that have not applied them yet back up and restore without them. */
 const LATER_MIGRATION_TABLES: DatabaseBackupTable[] = ["domain_tracking_hosts", "message_tracking", "message_opens", "follow_ups", "user_compose_preferences"];
-const REQUIRED_BACKUP_TABLES: DatabaseBackupTable[] = ["users", "domains", "mailboxes", "mailbox_access", "contacts", "folders", "api_keys", "messages", "message_attachments", "outbound_jobs", "routing_rules", "webhooks", "webhook_deliveries", "sessions", "audit_logs", "backup_settings", "backups", "app_settings", "license_settings"];
+const REQUIRED_BACKUP_TABLES: DatabaseBackupTable[] = ["users", "domains", "mailboxes", "mailbox_access", "contacts", "folders", "api_keys", "messages", "message_attachments", "outbound_jobs", "routing_rules", "webhooks", "webhook_deliveries", "sessions", "audit_logs", "backup_settings", "backups", "app_settings"];
+const RETIRED_BACKUP_TABLE = "license_settings";
 const INSERT_BATCH_SIZE = 50;
 
 export function getBackupConfigurationStatus(_env?: CloudflareEnv) {
@@ -20,7 +21,7 @@ export function getBackupConfigurationStatus(_env?: CloudflareEnv) {
 }
 
 /**
- * Tables D1 manages itself, which are intentionally absent from BACKUP_TABLES.
+ * Internal, derived, or retired tables intentionally absent from BACKUP_TABLES.
  */
 export const INTERNAL_TABLE_PATTERNS = ["sqlite_%", "_cf%", "messages_fts%"];
 const matchesPattern = (name: string, pattern: string) => name.startsWith(pattern.replace(/%$/, ""));
@@ -54,6 +55,8 @@ export const INTERNAL_TABLES = [
 	"webauthn_challenges",
 	"passkey_enrollment_grants",
 	"auth_step_ups",
+	// Retired commercial metadata on databases awaiting its removal migration.
+	RETIRED_BACKUP_TABLE,
 ];
 
 /**
@@ -161,19 +164,31 @@ function parseDatabaseBackup(content: ArrayBuffer): DatabaseBackupDocument {
 	let value: unknown;
 	try { value = JSON.parse(new TextDecoder().decode(content)); } catch { throw new Error("The selected file is not a valid Mailflare backup"); }
 	if (!isDatabaseBackupDocument(value)) throw new Error("The selected file is not a valid Mailflare backup");
-	return value;
+	const document = value as DatabaseBackupDocument & { tables: Record<string, unknown>; includedTables?: string[] };
+	delete document.tables[RETIRED_BACKUP_TABLE];
+	if (document.includedTables) {
+		document.includedTables = document.includedTables.filter((table) => table !== RETIRED_BACKUP_TABLE) as DatabaseBackupTable[];
+		if (!document.includedTables.length) throw new Error("The selected file is not a valid Mailflare backup");
+	}
+	return document;
 }
 
 function isDatabaseBackupDocument(value: unknown): value is DatabaseBackupDocument {
-	if (!value || typeof value !== "object") return false;
-	const document = value as Partial<DatabaseBackupDocument>;
-	if (document.format !== "mailflare-database-backup" || typeof document.version !== "number" || ![1, 2].includes(document.version) || !document.tables) return false;
-	if (document.includedTables) {
-		if (!Array.isArray(document.includedTables) || !document.includedTables.length || new Set(document.includedTables).size !== document.includedTables.length) return false;
-		if (!document.includedTables.every((table) => BACKUP_TABLES.includes(table) && Array.isArray(document.tables?.[table]))) return false;
-	} else if (!REQUIRED_BACKUP_TABLES.every((table) => Array.isArray(document.tables?.[table]))) return false;
+	if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+	const document = value as Record<string, unknown>;
+	const tables = document.tables;
+	if (document.format !== "mailflare-database-backup" || typeof document.version !== "number" || ![1, 2].includes(document.version) || !tables || typeof tables !== "object" || Array.isArray(tables)) return false;
+	const rawTables = tables as Record<string, unknown>;
+	const retired = rawTables[RETIRED_BACKUP_TABLE];
+	if (retired !== undefined && (!Array.isArray(retired) || !retired.every((row) => !!row && typeof row === "object" && !Array.isArray(row)))) return false;
+	if (document.includedTables !== undefined) {
+		const included = document.includedTables;
+		if (!Array.isArray(included) || !included.length || included.some((table) => typeof table !== "string") || new Set(included).size !== included.length) return false;
+		if (!included.every((table) => (BACKUP_TABLES as string[]).includes(table as string) || (table as string) === RETIRED_BACKUP_TABLE) || !included.every((table) => Array.isArray(rawTables[table as string]))) return false;
+		if (included.every((table) => (table as string) === RETIRED_BACKUP_TABLE)) return false;
+	} else if (!REQUIRED_BACKUP_TABLES.every((table) => Array.isArray(rawTables[table]))) return false;
 	return BACKUP_TABLES.every((table) => {
-		const rows = document.tables?.[table];
+		const rows = rawTables[table];
 		return rows === undefined || Array.isArray(rows);
 	});
 }

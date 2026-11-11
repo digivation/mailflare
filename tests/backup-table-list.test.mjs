@@ -93,6 +93,12 @@ test("every backed-up table sits in exactly one group that only holds backed-up 
 	assert.deepEqual([...duplicated, ...unknown], []);
 });
 
+test("retired license metadata is excluded from tables and every backup group", () => {
+	assert.ok(INTERNAL_TABLES.includes("license_settings"));
+	assert.ok(!BACKUP_TABLES.includes("license_settings"));
+	assert.ok(!BACKUP_TABLE_GROUPS.flatMap((group) => group.tables).includes("license_settings"));
+});
+
 test("an unlisted table aborts the backup with a pointing-finger message", async () => {
 	const scratch = new Database(":memory:");
 	scratch.exec("CREATE TABLE future_table (id TEXT PRIMARY KEY)");
