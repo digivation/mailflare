@@ -11,7 +11,6 @@ export type ManagedAccount = {
 	calendarEnabled: boolean;
 	driveEnabled: boolean;
 	forwardingEmail: string | null;
-	canForwardEmail: boolean;
 	hasAvatar: boolean;
 	/** False for a passkey-only account, which cannot be given a password here. */
 	passwordSet: boolean;
