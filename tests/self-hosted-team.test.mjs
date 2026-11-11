@@ -7,6 +7,33 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { build } from "esbuild";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+const directory = mkdtempSync(join(root, "node_modules", "self-hosted-team-test-"));
+after(() => rmSync(directory, { recursive: true, force: true }));
+await build({
+	stdin: {
+		contents: `
+			export { SqliteDatabase } from "./server/runtime/sqlite-database.ts";
+			export { applyMigrations } from "./server/runtime/migrate.ts";
+			export { getDb } from "./src/db/index.ts";
+			export { getMailboxAccessLevel, listAccessibleMailboxes } from "./src/lib/mailboxes/access.ts";
+			export { getMailboxNotificationUserIds } from "./src/lib/realtime/utils.ts";
+		`,
+		resolveDir: root,
+		sourcefile: "self-hosted-team-entry.ts",
+	},
+	outfile: join(directory, "entry.mjs"),
+	bundle: true,
+	platform: "node",
+	format: "esm",
+	target: "node22",
+	tsconfig: join(root, "tsconfig.json"),
+	packages: "external",
+	alias: { "cloudflare:workers": "./server/runtime/cloudflare-workers.ts" },
+	logLevel: "silent",
+});
+const api = await import(pathToFileURL(join(directory, "entry.mjs")).href);
+
 test("commercial licensing pages, routes, services and imports are absent", () => {
 	for (const path of [
 		"src/app/(admin)/licenses/page.tsx",
@@ -33,31 +60,6 @@ test("commercial licensing pages, routes, services and imports are absent", () =
 	const { stdout, status } = spawnSync("git", ["grep", "-n", "-E", "@/lib/licenses|@/components/license-indicator|/api/licenses", "--", "src"], { cwd: root, encoding: "utf8" });
 	assert.equal(status, 1, stdout);
 });
-const directory = mkdtempSync(join(root, "node_modules", "self-hosted-team-test-"));
-after(() => rmSync(directory, { recursive: true, force: true }));
-await build({
-	stdin: {
-		contents: `
-			export { SqliteDatabase } from "./server/runtime/sqlite-database.ts";
-			export { applyMigrations } from "./server/runtime/migrate.ts";
-			export { getDb } from "./src/db/index.ts";
-			export { getMailboxAccessLevel, listAccessibleMailboxes } from "./src/lib/mailboxes/access.ts";
-			export { getMailboxNotificationUserIds } from "./src/lib/realtime/utils.ts";
-		`,
-		resolveDir: root,
-		sourcefile: "self-hosted-team-entry.ts",
-	},
-	outfile: join(directory, "entry.mjs"),
-	bundle: true,
-	platform: "node",
-	format: "esm",
-	target: "node22",
-	tsconfig: join(root, "tsconfig.json"),
-	packages: "external",
-	alias: { "cloudflare:workers": "./server/runtime/cloudflare-workers.ts" },
-	logLevel: "silent",
-});
-const api = await import(pathToFileURL(join(directory, "entry.mjs")).href);
 
 async function fixture(t) {
 	const database = new api.SqliteDatabase(":memory:");
