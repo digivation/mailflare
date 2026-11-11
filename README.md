@@ -24,14 +24,6 @@ Fresh installs must use the fork's `ourflare` branch. Follow the [deployment gui
   </tr>
 </table>
 
-### Sponsors
-
-<a target="_blank" href="https://sequenzy.com/?ref=hieunc229/mailflare"><img height="80" src="sponsors/sequenzy.png" alt="Sequenzy"></a>
-&nbsp;
-<a target="_blank" href="https://drivemug.com/?ref=hieunc229/mailflare"><img height="80" src="sponsors/drivemug.png" alt="Drivemug"></a>
-
-Want to support Mailflare? [Become a sponsor](https://store.paymug.co/buy/mailflare-sponsor).
-
 ## Features
 
 ### Apps
