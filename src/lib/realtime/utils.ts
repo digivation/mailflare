@@ -6,6 +6,8 @@ import type { NewMessageNotification, AgentDraftNotification } from "./types";
 import { sendPushNotifications } from "@/lib/push/server";
 import { sendNativePush } from "@/lib/push/native";
 
+const notificationRecipientBatchSize = 90;
+
 export function getSessionTokenFromRequest(request: Request): string | undefined {
 	const cookie = request.headers.get("Cookie");
 	if (!cookie) return undefined;
@@ -45,11 +47,17 @@ export async function getMailboxNotificationUserIds(
 		: [];
 	const recipientIds = [...new Set([ownerUserId, mailbox.domainOwnerUserId, ...sharedUserIds].filter((id): id is string => !!id))];
 	if (!recipientIds.length) return [];
-	return (await db
-		.select({ id: users.id })
-		.from(users)
-		.where(and(inArray(users.id, recipientIds), eq(users.disabled, false), isNull(users.deletedAt))))
-		.map((user) => user.id);
+	const activeUserIds: string[] = [];
+	// Leave room below D1's 100-parameter limit for the active-account filters.
+	for (let index = 0; index < recipientIds.length; index += notificationRecipientBatchSize) {
+		const batch = recipientIds.slice(index, index + notificationRecipientBatchSize);
+		activeUserIds.push(...(await db
+			.select({ id: users.id })
+			.from(users)
+			.where(and(inArray(users.id, batch), eq(users.disabled, false), isNull(users.deletedAt))))
+			.map((user) => user.id));
+	}
+	return activeUserIds;
 }
 
 export async function notifyUsersOfNewMessage(

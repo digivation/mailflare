@@ -27,6 +27,7 @@ Prepared on 2026-11-10 for `/home/matthew/Development/mailflare`, branch `ourfla
 - Added grant-level access/revocation and notification coverage; removed license fixtures from the focused route tests. Kept account-management API guards unchanged for Phase 2.
 - Focused Compose suite on Node `v22.23.4`: `node --test tests/self-hosted-team.test.mjs tests/mailbox-settings-management.test.mjs tests/messages-route-performance.test.mjs tests/jmap-request-memo.test.mjs` — **22 passed, 0 failed**.
 - `npx tsc --noEmit --incremental false` still exits 2 on the two Phase 0 diagnostics (`src/app/page.tsx` missing `calendarEnabled`/`driveEnabled`; `src/lib/domains/resend-receiving.ts` missing inferred `status`). No diagnostics in Phase 1 files.
+- Follow-up hardening: filtered invalid/unreadable grants from aggregate mailbox lists and chunked notification recipient queries into 90-ID batches. Compose focused suite: **23 passed, 0 failed**, including a 105-delegate bind-limit regression.
 - Commit: `refactor(mailboxes): remove commercial sharing gates, preserve grants`.
 
 ### Prepared patch: inspected, not applied

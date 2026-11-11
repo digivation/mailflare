@@ -106,7 +106,7 @@ export async function listAccessibleMailboxes(db: AppDatabase, user: Pick<Sessio
 				eq(mailboxes.disabled, false),
 			),
 		);
-	const shared = sharedRows.map((row) => {
+	const shared = sharedRows.filter((row) => hasMailboxPermission(row.permission, "read_only")).map((row) => {
 		const { avatarKey, ...mailbox } = row;
 		return {
 			...mailbox,

@@ -34,6 +34,7 @@ const api = await import(pathToFileURL(join(directory, "entry.mjs")).href);
 
 async function fixture(t) {
 	const database = new api.SqliteDatabase(":memory:");
+	const statements = [];
 	t.after(() => database.db.close());
 	await api.applyMigrations(database, join(root, "drizzle/migrations"));
 	database.db.exec(`
@@ -57,11 +58,12 @@ async function fixture(t) {
 	`);
 	const prepare = database.prepare.bind(database);
 	database.prepare = (sql) => {
+		statements.push(sql);
 		assert.doesNotMatch(sql, /license_settings/i, "mailbox access must not query licensing state");
 		return prepare(sql);
 	};
 	const env = { DB: database };
-	return { database, db: api.getDb(env), env };
+	return { database, db: api.getDb(env), env, statements };
 }
 
 test("shared mailbox grants retain all four permission levels and revoke immediately", async (t) => {
@@ -99,6 +101,7 @@ test("personal, unassigned and disabled mailboxes remain inaccessible", async (t
 	assert.equal(invalid?.canSendAs, false);
 	assert.equal(invalid?.canSendOnBehalf, false);
 	assert.equal(invalid?.canManage, false);
+	assert.deepEqual(await api.listAccessibleMailboxes(f.db, member), []);
 });
 
 test("new-message recipients require a readable grant and active accounts", async (t) => {
@@ -119,4 +122,27 @@ test("new-message recipients require a readable grant and active accounts", asyn
 	assert.deepEqual(await api.getMailboxNotificationUserIds(f.env, "shared", "owner"), ["domain-owner"]);
 	f.database.db.prepare("UPDATE users SET deleted_at = 1 WHERE id = 'domain-owner'").run();
 	assert.deepEqual(await api.getMailboxNotificationUserIds(f.env, "shared", "owner"), []);
+});
+
+test("notification recipients are queried in batches below D1's bind limit", async (t) => {
+	const f = await fixture(t);
+	const addUser = f.database.db.prepare(`
+		INSERT INTO users (id, email, password_hash, name, role, disabled, deleted_at, created_at)
+		VALUES (?, ?, 'hash', 'Delegate', 'user', 0, NULL, 1)
+	`);
+	const addGrant = f.database.db.prepare(`
+		INSERT INTO mailbox_access (id, mailbox_id, user_id, permission, created_by_user_id, created_at)
+		VALUES (?, 'shared', ?, 'read_only', 'owner', 1)
+	`);
+	for (let index = 0; index < 105; index++) {
+		const id = `delegate-${index}`;
+		addUser.run(id, `${id}@example.test`);
+		addGrant.run(`grant-${index}`, id);
+	}
+	f.statements.length = 0;
+	const recipients = await api.getMailboxNotificationUserIds(f.env, "shared", "owner");
+	assert.equal(recipients.length, 108);
+	const recipientQueries = f.statements.filter((sql) => sql.toLowerCase().includes('from "users"') && sql.toLowerCase().includes(' in ('));
+	assert.equal(recipientQueries.length, 2);
+	assert.ok(recipientQueries.every((sql) => (sql.match(/\?/g) ?? []).length <= 100));
 });
