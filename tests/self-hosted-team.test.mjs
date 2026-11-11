@@ -17,7 +17,7 @@ await build({
 			export { applyMigrations } from "./server/runtime/migrate.ts";
 			export { getDb } from "./src/db/index.ts";
 			export { getMailboxAccessLevel, listAccessibleMailboxes } from "./src/lib/mailboxes/access.ts";
-			export { getMailboxNotificationUserIds } from "./src/lib/realtime/utils.ts";
+			export { getMailboxNotificationUserIds, notifyUsersOfNewMessage } from "./src/lib/realtime/utils.ts";
 		`,
 		resolveDir: root,
 		sourcefile: "self-hosted-team-entry.ts",
@@ -174,4 +174,17 @@ test("notification recipients are queried in batches below D1's bind limit", asy
 	const recipientQueries = f.statements.filter((sql) => sql.toLowerCase().includes('from "users"') && sql.toLowerCase().includes(' in ('));
 	assert.equal(recipientQueries.length, 2);
 	assert.ok(recipientQueries.every((sql) => (sql.match(/\?/g) ?? []).length <= 100));
+	f.statements.length = 0;
+	const delivered = [];
+	f.env.REALTIME = { getByName: (id) => ({ fetch: async () => { delivered.push(id); return new Response(); } }) };
+	f.env.VAPID_PUBLIC_KEY = `B${"A".repeat(86)}`;
+	f.env.VAPID_PRIVATE_KEY = "A".repeat(43);
+	f.env.VAPID_SUBJECT = "mailto:push@example.test";
+	await api.notifyUsersOfNewMessage(f.env, recipients, {
+		type: "new_message", mailboxId: "shared", messageId: "message", from: "sender@example.test", fromName: null, subject: "Hello",
+	});
+	assert.equal(delivered.length, 108);
+	const pushQueries = f.statements.filter((sql) => /from \"(?:push_subscriptions|push_devices)\"/i.test(sql));
+	assert.equal(pushQueries.length, 4);
+	assert.ok(pushQueries.every((sql) => (sql.match(/\?/g) ?? []).length <= 100));
 });

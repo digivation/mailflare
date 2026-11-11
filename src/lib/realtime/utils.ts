@@ -76,7 +76,10 @@ export async function notifyUsersOfNewMessage(
 				body: JSON.stringify(payload),
 			});
 		}),
-		...(payload.type === "agent_draft" ? [] : [sendPushNotifications(env, userIds, payload), sendNativePush(env, userIds, payload)]),
+		...(payload.type === "agent_draft" ? [] : Array.from(
+			{ length: Math.ceil(userIds.length / notificationRecipientBatchSize) },
+			(_, index) => userIds.slice(index * notificationRecipientBatchSize, (index + 1) * notificationRecipientBatchSize),
+		).flatMap((batch) => [sendPushNotifications(env, batch, payload), sendNativePush(env, batch, payload)])),
 	]);
 	for (const result of results) {
 		if (result.status === "rejected") console.error("New-message notification failed", result.reason);
