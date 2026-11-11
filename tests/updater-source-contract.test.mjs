@@ -23,10 +23,15 @@ test("updater source repository and branch are pinned to the fork", () => {
 });
 
 test("updater release is offered to installations on 0.5.4", () => {
-  assert.equal(packageJson.version, "0.5.5");
   assert.equal(lock.version, packageJson.version);
   assert.equal(lock.packages[""].version, packageJson.version);
-  const current = [0, 5, 4];
-  const target = packageJson.version.split(".").map(Number);
-  assert.ok(target.some((part, index) => part > current[index] && target.slice(0, index).every((n, i) => n === current[i])));
+  const versionParts = (version) => version.split(".").map(Number);
+  const current = versionParts("0.5.4");
+  const target = versionParts(packageJson.version);
+  const newer = target.some(
+    (part, index) =>
+      part > current[index] &&
+      target.slice(0, index).every((n, i) => n === current[i]),
+  );
+  assert.ok(newer, `${packageJson.version} must be newer than 0.5.4`);
 });
