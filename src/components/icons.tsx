@@ -11,7 +11,6 @@ import {
 	ArrowRightIcon as HugeArrowRightIcon,
 	ArrowUpIcon as HugeArrowUpIcon,
 	AtSignIcon as HugeAtSignIcon,
-	StarAward02Icon as HugeBadgeDollarSignIcon,
 	BanIcon as HugeBanIcon,
 	BellIcon as HugeBellIcon,
 	BellOffIcon as HugeBellOffIcon,
@@ -173,7 +172,6 @@ export const ArrowLeft = createIcon(HugeArrowLeftIcon, "ArrowLeft");
 export const ArrowRight = createIcon(HugeArrowRightIcon, "ArrowRight");
 export const ArrowUp = createIcon(HugeArrowUpIcon, "ArrowUp");
 export const AtSign = createIcon(HugeAtSignIcon, "AtSign");
-export const BadgeDollarSign = createIcon(HugeBadgeDollarSignIcon, "BadgeDollarSign");
 export const Ban = createIcon(HugeBanIcon, "Ban");
 export const Bell = createIcon(HugeBellIcon, "Bell");
 export const BellOff = createIcon(HugeBellOffIcon, "BellOff");

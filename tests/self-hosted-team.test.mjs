@@ -1,11 +1,38 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import test, { after } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { build } from "esbuild";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+test("commercial licensing pages, routes, services and imports are absent", () => {
+	for (const path of [
+		"src/app/(admin)/licenses/page.tsx",
+		"src/app/(admin)/licenses/license-activation.tsx",
+		"src/app/(admin)/licenses/utils.ts",
+		"src/app/(admin)/licenses/types.d.ts",
+		"src/app/api/licenses/route.ts",
+		"src/app/api/licenses/activate/route.ts",
+		"src/app/api/licenses/validate/route.ts",
+		"src/app/api/licenses/deactivate/route.ts",
+		"src/app/api/licenses/utils.ts",
+		"src/app/api/licenses/types.d.ts",
+		"src/lib/licenses/constants.ts",
+		"src/lib/licenses/paymug.ts",
+		"src/lib/licenses/service.ts",
+		"src/lib/licenses/types.d.ts",
+		"src/lib/licenses/utils.ts",
+		"src/components/license-indicator.tsx",
+		"src/components/license-indicator-utils.ts",
+		"src/components/license-indicator-types.d.ts",
+		"src/components/license-required-overlay.tsx",
+		"src/components/license-required-overlay-types.d.ts",
+	]) assert.equal(existsSync(join(root, path)), false, path);
+	const { stdout, status } = spawnSync("git", ["grep", "-n", "-E", "@/lib/licenses|@/components/license-indicator|/api/licenses", "--", "src"], { cwd: root, encoding: "utf8" });
+	assert.equal(status, 1, stdout);
+});
 const directory = mkdtempSync(join(root, "node_modules", "self-hosted-team-test-"));
 after(() => rmSync(directory, { recursive: true, force: true }));
 await build({
