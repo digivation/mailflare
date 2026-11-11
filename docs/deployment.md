@@ -205,6 +205,8 @@ New application releases must remain compatible with the previous schema until a
 
 When adding a schema change, create a new uniquely named SQL file in `drizzle/migrations` and do not edit an applied migration. Build and development commands generate the Worker migration bundle from those files. `npm run db:bundle` can generate it explicitly.
 
-## Branding license
+## Branding
 
-Activate a purchased Pro or Team key from **Admin → Licenses**. Mailflare sends the key to Paymug and stores only a one-way hash and the activation state. Apply all D1 migrations before activating a license.
+The primary administrator can configure the installation name and icon from **Admin → Branding**. Branding settings are stored separately from application code and mail content; existing branding remains available after upgrades.
+
+When upgrading, deploy the new application and apply its pending database migrations through Admin settings. The migration removes the retired licensing-settings table. New backups omit it, while complete older backups that contain it remain restorable; the retired data is discarded. Do not roll back to an older commercial build after applying this migration: it may expect the removed table and commercial licensing routes.

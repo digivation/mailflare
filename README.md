@@ -75,6 +75,8 @@ New Amazon SES accounts start in a sandbox. Ask AWS for production access to lif
 
 More options: [deployment guide](docs/deployment.md).
 
+Mailflare features no longer require a commercial product license. See the [fork and upgrade notes](docs/landing-in-love-fork.md); the project remains under the legal terms in [LICENSE](LICENSE).
+
 ### Deploy with an AI agent
 
 Paste this into an AI agent that has terminal access (Claude Code, Codex, Cursor and similar):
