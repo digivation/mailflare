@@ -70,7 +70,7 @@ async function bundleI18n(outfile, extraLocale = false) {
 					: path === "next/font/google"
 						? 'export const Geist = () => ({ variable: "sans" }); export const Geist_Mono = () => ({ variable: "mono" });'
 						: path === "./home-server-utils"
-							? 'export async function getHomeBranding() { return { appName: "Mailflare", hasCustomIcon: false, canCustomizeBranding: false }; }'
+							? 'export async function getHomeBranding() { return { appName: "Mailflare", hasCustomIcon: false }; }'
 							: path === "@/lib/cloudflare"
 								? "export function getEnv() { return { ASSETS: { fetch: globalThis.readTestAsset } }; }"
 							: 'export function Providers({ children }) { return children; }' }));

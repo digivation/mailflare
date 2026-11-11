@@ -310,6 +310,8 @@ Each phase is a small coherent commit. Run its focused tests and a no-emit type 
 
 **Commit:** `refactor(branding): remove commercial customization gate`.
 
+**Phase 3 result:** Removed branding entitlement reads and response/default capability fields, made configured branding/icons available regardless of license state, removed the branding paywall UI, and retained primary-admin authorization plus input validation. Added route tests for primary-admin-only writes and name/type/size boundaries; updated icon fallback/cache tests to run without a licensing stub. `node --test tests/image-response-cache.test.mjs tests/i18n.test.mjs tests/self-hosted-team.test.mjs tests/branding-route.test.mjs`: **23 passed, 0 failed**. `npm run build`: **pass** (existing Vinext `INEFFECTIVE_DYNAMIC_IMPORT` warnings). `npx tsc --noEmit --incremental false`: **fails only on the two Phase 0 diagnostics** in `src/app/page.tsx` (`calendarEnabled`/`driveEnabled`) and `src/lib/domains/resend-receiving.ts` (`status`); no Phase 3 diagnostics. `git diff --check`: **pass**. Commit: `fdefad0`.
+
 ### Phase 4 — forwarding and booking hosts without commercial policy
 
 **Files/symbols:** `src/lib/email/account-forwarding.ts`; `src/app/api/settings/profile/route.ts`, `src/app/api/settings/forwarding/route.ts`, `src/app/api/auth/me/route.ts`; dashboard/v1 account-update handlers; `src/components/settings/types.d.ts`; account detail page/types; two booking route files. Verification dependencies: `worker.ts`, `src/lib/email/intake.ts`, `src/lib/email/incoming.ts`, `src/lib/booking/hosts.ts`, `src/lib/validators.ts` remain structurally unchanged unless an evidence-backed regression requires a minimal fix.
