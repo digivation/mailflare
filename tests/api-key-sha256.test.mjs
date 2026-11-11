@@ -184,3 +184,13 @@ test("MCP accepts only mcp keys and uses the same SHA-256 check", async (t) => {
 	clearApiKeyVerificationCache();
 	assert.equal(await authenticateMcpRequest(env, request), null);
 });
+
+test("MCP rejects keys owned by deleted but enabled users", async (t) => {
+	const { database, env } = await createFixture(t);
+	const issued = await generateApiKey();
+	insertKey(database, { id: "deleted-mcp", prefix: issued.prefix, hash: issued.hash, sha256: issued.sha256, kind: "mcp", scopes: '["mcp:read"]' });
+	database.db.prepare("UPDATE users SET deleted_at = 1 WHERE id = 'u1'").run();
+	assert.equal(database.db.prepare("SELECT disabled, deleted_at FROM users WHERE id = 'u1'").get().disabled, 0);
+	const request = new Request("https://mail.example/mcp", { headers: { Authorization: `Bearer ${issued.fullKey}` } });
+	assert.equal(await authenticateMcpRequest(env, request), null);
+});

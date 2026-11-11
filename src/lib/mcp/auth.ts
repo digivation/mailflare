@@ -23,7 +23,7 @@ export async function authenticateMcpRequest(env: CloudflareEnv, request: Reques
 		const isAdminKey = allScopes.length > 0 && allScopes.every((scope) => ADMIN_SCOPES.has(scope));
 		if (!isMailKey && !isAdminKey) return null;
 		const [user] = await db.select().from(users).where(eq(users.id, candidate.userId)).limit(1);
-		if (!user || user.disabled) return null;
+		if (!user || user.disabled || user.deletedAt) return null;
 		if (isAdminKey && user.role !== "admin") return null;
 		const allowed = isMailKey ? await db.select({ mailboxId: mcpKeyMailboxes.mailboxId }).from(mcpKeyMailboxes).where(eq(mcpKeyMailboxes.keyId, candidate.id)) : [];
 		const mailboxIds: string[] = [];
