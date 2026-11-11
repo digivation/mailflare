@@ -264,6 +264,12 @@ test("account API keys still require account scope and an active admin owner", a
 		.run("inactive-key", inactiveKey.prefix, inactiveKey.hash, inactiveKey.sha256, '["accounts"]');
 	assert.equal((await f.post("api", {}, wrongScope.fullKey)).status, 401);
 	assert.equal((await f.post("api", {}, inactiveKey.fullKey)).status, 401);
+	const deletedKey = await generateApiKey();
+	f.database.db.prepare("INSERT INTO api_keys (id, user_id, name, prefix, key_hash, key_sha256, scopes, created_at) VALUES (?, 'admin', 'Deleted owner', ?, ?, ?, ?, 1)")
+		.run("deleted-key", deletedKey.prefix, deletedKey.hash, deletedKey.sha256, '["accounts"]');
+	f.database.db.prepare("UPDATE users SET deleted_at = 1 WHERE id = 'admin'").run();
+	assert.equal((await apiList(f.request("/api/v1/accounts", "GET", undefined, deletedKey.fullKey))).status, 401);
+	assert.equal((await f.post("api", {}, deletedKey.fullKey)).status, 401);
 	assert.equal(f.calls.length, 0);
 });
 

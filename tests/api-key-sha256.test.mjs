@@ -159,6 +159,15 @@ test("disabled users and account passwords are rejected", async (t) => {
 	assert.equal(await authenticateApiKeyValue(env, ""), null);
 });
 
+test("deleted but enabled users cannot authenticate with API keys", async (t) => {
+	const { database, env } = await createFixture(t);
+	const issued = await generateApiKey();
+	insertKey(database, { id: "deleted-owner", prefix: issued.prefix, hash: issued.hash, sha256: issued.sha256, scopes: '["accounts"]' });
+	database.db.prepare("UPDATE users SET deleted_at = 1 WHERE id = 'u1'").run();
+	assert.equal(database.db.prepare("SELECT disabled, deleted_at FROM users WHERE id = 'u1'").get().disabled, 0);
+	assert.equal(await authenticateApiKeyValue(env, issued.fullKey), null);
+});
+
 test("MCP accepts only mcp keys and uses the same SHA-256 check", async (t) => {
 	const { database, env } = await createFixture(t);
 	const issued = await generateApiKey();
