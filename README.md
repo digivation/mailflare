@@ -7,7 +7,7 @@ A self-hosted alternative to Google Workspace. Setup **custom domain Emails**, *
 
 Run it on Cloudflare or Docker. Send and receive with Cloudflare, Resend or Amazon SES. Store files in R2, Backblaze B2 or AWS S3. Use D1, Postgres, MySQL or Turso for the database.
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/hieunc229/mailflare)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/digivation/mailflare)
 
 ## Screenshots
 
@@ -82,7 +82,7 @@ Mailflare features no longer require a commercial product license. See the [fork
 Paste this into an AI agent that has terminal access (Claude Code, Codex, Cursor and similar):
 
 ```text
-Install Mailflare for me from https://github.com/hieunc229/mailflare on my Cloudflare account.
+Install Mailflare for me from https://github.com/digivation/mailflare on my Cloudflare account.
 
 1. Read README.md, docs/deployment.md and wrangler.jsonc first.
 2. Ask me for my Cloudflare account ID and two API tokens, using a secret input:

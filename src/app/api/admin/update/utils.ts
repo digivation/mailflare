@@ -17,7 +17,8 @@ import packageMetadata from "../../../../../package.json";
 const GITHUB_API_URL = "https://api.github.com";
 const GITHUB_API_VERSION = "2026-03-10";
 const UPDATE_WORKFLOW = "deploy-update.yml";
-const UPDATE_SOURCE_REPOSITORY = "hieunc229/mailflare";
+const UPDATE_SOURCE_REPOSITORY = "digivation/mailflare";
+const UPDATE_SOURCE_REF = "ourflare";
 
 export async function authorizeAdminRequest(request: Request) {
   const env = getEnv();
@@ -154,13 +155,8 @@ function isNewerVersion(
 }
 
 async function getTargetVersion(): Promise<string> {
-  // const sourceConfig: UpdateDispatchConfig = {
-  //   repository: UPDATE_SOURCE_REPOSITORY,
-  //   token,
-  // };
-  // const ref = await getDispatchRef(sourceConfig);
   const { data, response } = await githubRequest<GitHubContentResponse>(
-    `/repos/${UPDATE_SOURCE_REPOSITORY}/contents/package.json`,
+    `/repos/${UPDATE_SOURCE_REPOSITORY}/contents/package.json?ref=${UPDATE_SOURCE_REF}`,
   );
 
   if (!response.ok || !data?.content || data.encoding !== "base64") {

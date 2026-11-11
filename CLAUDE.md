@@ -182,7 +182,7 @@ Branding is configured by the primary administrator and stored in `app_settings`
 
 ### Self-update
 
-The admin overview dispatches `deploy-update.yml` (constant in `src/app/api/admin/update/utils.ts`) in the installation repo, which merges the upstream default branch and pushes it. It does not migrate, build, or deploy; the connected Cloudflare Git integration deploys the push. The admin update card separately reports and applies pending D1 migrations through the Worker binding.
+The admin overview dispatches `deploy-update.yml` in the installation repo. The workflow replaces its tracked tree from `digivation/mailflare` branch `ourflare` and pushes it; source repository and branch are pinned, while `GITHUB_UPDATE_REPO`/`GITHUB_UPDATE_REF` select only the installation destination. It does not migrate, build, or deploy; the connected Cloudflare Git integration deploys the push. The admin update card reads the fork's `package.json` at `ourflare` for version checks and separately reports/applies pending D1 migrations through the Worker binding. Install the workflow manually before the first update; target-only tracked files are removed.
 
 ## Conventions
 
