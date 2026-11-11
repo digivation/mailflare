@@ -164,16 +164,18 @@ function parseDatabaseBackup(content: ArrayBuffer): DatabaseBackupDocument {
 	let value: unknown;
 	try { value = JSON.parse(new TextDecoder().decode(content)); } catch { throw new Error("The selected file is not a valid Mailflare backup"); }
 	if (!isDatabaseBackupDocument(value)) throw new Error("The selected file is not a valid Mailflare backup");
-	const document = value as DatabaseBackupDocument & { tables: Record<string, unknown>; includedTables?: string[] };
-	delete document.tables[RETIRED_BACKUP_TABLE];
-	if (document.includedTables) {
-		document.includedTables = document.includedTables.filter((table) => table !== RETIRED_BACKUP_TABLE) as DatabaseBackupTable[];
-		if (!document.includedTables.length) throw new Error("The selected file is not a valid Mailflare backup");
+	const raw = value as Record<string, unknown> & { tables: Record<string, unknown>; includedTables?: string[] };
+	const tables = { ...raw.tables };
+	delete tables[RETIRED_BACKUP_TABLE];
+	let includedTables: DatabaseBackupTable[] | undefined;
+	if (raw.includedTables !== undefined) {
+		includedTables = (raw.includedTables as string[]).filter((table): table is DatabaseBackupTable => table !== RETIRED_BACKUP_TABLE);
+		if (!includedTables.length) throw new Error("The selected file is not a valid Mailflare backup");
 	}
-	return document;
+	return { format: "mailflare-database-backup", version: raw.version as 1 | 2, createdAt: raw.createdAt as string, ...(includedTables ? { includedTables } : {}), tables: tables as DatabaseBackupDocument["tables"] };
 }
 
-function isDatabaseBackupDocument(value: unknown): value is DatabaseBackupDocument {
+function isDatabaseBackupDocument(value: unknown): value is Record<string, unknown> & { tables: Record<string, unknown>; includedTables?: string[] } {
 	if (!value || typeof value !== "object" || Array.isArray(value)) return false;
 	const document = value as Record<string, unknown>;
 	const tables = document.tables;

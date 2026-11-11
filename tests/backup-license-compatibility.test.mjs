@@ -34,42 +34,72 @@ function handle(sqlite, sqlLog = []) {
 
 const bytes = (doc) => new TextEncoder().encode(JSON.stringify(doc));
 const userCount = (db) => db.prepare("SELECT count(*) AS n FROM users").get().n;
+const restore = (d1, doc) => { const content = bytes(doc); return restoreDatabaseRecords(d1, content.buffer.slice(content.byteOffset, content.byteOffset + content.byteLength)); };
 
-test("legacy license table is validated then discarded for v1/v2, with or without includedTables", async () => {
+test("current complete v2 exports omit retired metadata and restore on pre/post-drop databases", async () => {
+	for (const preDrop of [true, false]) {
+		const db = createDb(preDrop), sql = [], d1 = handle(db, sql);
+		const backup = await exportDatabaseRecords(d1);
+		const current = JSON.parse(new TextDecoder().decode(backup));
+		assert.equal("license_settings" in current.tables, false);
+		assert.equal(current.includedTables.includes("license_settings"), false);
+		await restore(d1, current);
+		assert.deepEqual(db.prepare("SELECT id,name FROM users").get(), { id: "sentinel", name: "Sentinel" });
+		assert.equal(db.prepare("SELECT name FROM sqlite_master WHERE name='license_settings'").get() !== undefined, preDrop);
+		assert.equal(sql.some((query) => /license_settings/i.test(query)), false);
+	}
+});
+
+test("legacy v1 and v2 complete documents normalize retired rows and preserve legacy compatibility", async () => {
 	for (const preDrop of [true, false]) for (const version of [1, 2]) for (const included of [false, true]) {
 		const db = createDb(preDrop), sql = [], d1 = handle(db, sql);
 		const current = JSON.parse(new TextDecoder().decode(await exportDatabaseRecords(d1)));
 		current.version = version;
 		current.tables.license_settings = [{ plan: "ignored", seats: 99 }];
+		// Retain the old body-table path and omit v1's later optional Drive group.
+		current.tables.message_bodies = version === 1 ? [{ message_id: "legacy-message", text_body: "legacy body" }] : [];
+		if (version === 1) {
+			current.tables.messages.push({ id: "legacy-message", user_id: "sentinel", direction: "inbound", from_addr: "sender@example.test", to_addr: "s@example.test", status: "received", read: 0, starred: 0, has_unsubscribe: 0, created_at: 1 });
+			delete current.tables.drive_items;
+			delete current.tables.drive_upload_parts;
+			delete current.tables.drive_shares;
+			current.includedTables = current.includedTables.filter((table) => !table.startsWith("drive_"));
+		}
 		if (included) current.includedTables.push("license_settings"); else delete current.includedTables;
-		const content = bytes(current);
-		await restoreDatabaseRecords(d1, content.buffer.slice(content.byteOffset, content.byteOffset + content.byteLength));
-		assert.equal(userCount(db), 1);
-		assert.equal(sql.some((query) => /(?:FROM|INTO|DELETE FROM)\s+license_settings/i.test(query)), false);
-		const fresh = JSON.parse(new TextDecoder().decode(await exportDatabaseRecords(d1)));
-		assert.equal("license_settings" in fresh.tables, false);
-		assert.equal(fresh.includedTables.includes("license_settings"), false);
+		await restore(d1, current);
+		assert.deepEqual(db.prepare("SELECT id,name FROM users").get(), { id: "sentinel", name: "Sentinel" });
+		if (version === 1) assert.equal(db.prepare("SELECT text_body FROM messages WHERE id='legacy-message'").get().text_body, "legacy body");
+		assert.equal(sql.some((query) => /license_settings/i.test(query)), false);
 	}
 });
 
-test("malformed, unknown, duplicate and partial inputs reject before sentinel deletion", async () => {
+test("complete legacy documents may omit the retired table", async () => {
+	for (const preDrop of [true, false]) {
+		const db = createDb(preDrop), d1 = handle(db);
+		const doc = JSON.parse(new TextDecoder().decode(await exportDatabaseRecords(d1)));
+		await restore(d1, doc);
+		assert.deepEqual(db.prepare("SELECT id,name FROM users").get(), { id: "sentinel", name: "Sentinel" });
+	}
+});
+
+test("malformed, unknown, duplicate and partial inputs reject on both database states before sentinel deletion", async () => {
 	const cases = [
 		(doc) => { doc.tables.license_settings = null; },
 		(doc) => { doc.tables.license_settings = [null]; },
 		(doc) => { doc.tables.license_settings = [ [] ]; },
-		(doc) => { doc.includedTables.push("license_settings"); },
 		(doc) => { doc.includedTables.push("not_a_table"); },
 		(doc) => { doc.includedTables.push(doc.includedTables[0]); },
+		(doc) => { doc.includedTables.push("license_settings"); delete doc.tables.license_settings; },
 		(doc) => { doc.includedTables = ["license_settings"]; doc.tables.license_settings = []; },
 		(doc) => { doc.includedTables = ["app_settings"]; doc.tables.app_settings = []; },
 	];
-	for (const mutate of cases) {
-		const db = createDb(), sql = [], d1 = handle(db, sql);
+	for (const preDrop of [true, false]) for (const mutate of cases) {
+		const db = createDb(preDrop), sql = [], d1 = handle(db, sql);
 		const doc = JSON.parse(new TextDecoder().decode(await exportDatabaseRecords(d1)));
 		mutate(doc);
-		const content = bytes(doc);
-		await assert.rejects(restoreDatabaseRecords(d1, content.buffer.slice(content.byteOffset, content.byteOffset + content.byteLength)));
-		assert.equal(userCount(db), 1);
+		await assert.rejects(restore(d1, doc));
+		assert.deepEqual(db.prepare("SELECT id,name FROM users").get(), { id: "sentinel", name: "Sentinel" });
 		assert.equal(sql.some((query) => /^(?:UPDATE users SET deleted_at|DELETE FROM users)/i.test(query)), false);
+		assert.equal(sql.some((query) => /license_settings/i.test(query)), false);
 	}
 });
