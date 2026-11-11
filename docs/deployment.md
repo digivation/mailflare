@@ -6,7 +6,7 @@ This guide covers Cloudflare deployment, runtime configuration, database backups
 
 Set up Mailflare in three steps:
 
-1. **Deploy the app:** use the Deploy to Cloudflare button, set the app name to `mailflare`, and provide the required `CF_TOKEN`.
+1. **Deploy the app:** check out the `ourflare` branch before building or importing, set the app name to `mailflare`, and provide the required `CF_TOKEN`.
 2. **Complete setup:** open the deployed app and follow `/setup` to check the installation and create the first admin account.
 3. **Connect your domain:** add a domain managed by the same Cloudflare account and choose which service receives its mail. Mailflare configures email routing and, when available and selected, email sending before helping you create the first mailbox. Resend and Amazon SES are alternatives to Cloudflare for receiving and sending; see [Sending and receiving providers](providers.md).
 
@@ -33,14 +33,16 @@ Paste only the token secret into the `CF_TOKEN` field in step 2. Do not include 
 
 ## Step 2: Deploy mailflare
 
-1. Click **Deploy to Cloudflare** and sign in to Cloudflare if prompted.
+Do not use Cloudflare's one-click deploy button: its branch selection is not verified and may deploy the upstream `main` branch (the original 0.5.4 commercial build). Instead, clone `ourflare` locally and deploy that checkout, or use Cloudflare Git integration and explicitly select and verify `ourflare` as the production/deployment branch before the first build.
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/digivation/mailflare)
+```bash
+git clone --branch ourflare --single-branch https://github.com/digivation/mailflare.git mailflare
+cd mailflare
+npm install
+npm run deploy
+```
 
-2. Choose the Cloudflare account that owns the domain you want to use.
-3. Set the app name to exactly `mailflare`. Do not rename it. 
-4. Add `CF_TOKEN` when Cloudflare asks for the app's runtime variables or secrets. This is different from the CF_TOKEN that Cloudflare uses to deploy the app.
-5. Start the deployment and wait for Cloudflare to finish provisioning and deploying the Worker.
+Choose the Cloudflare account that owns your domain. Keep the Worker name exactly `mailflare`. Configure the D1, R2, and queue bindings as described below, and add runtime `CF_TOKEN` as a Worker secret; this is separate from the deployment API token. Wait for Cloudflare to finish deploying before opening `/setup`.
 
 
 ### Optional Web Push configuration
@@ -85,7 +87,7 @@ Paste the prompt below into an agent with terminal access. Give it your Cloudfla
 - **Runtime token** (stored as the Worker secret `CF_TOKEN`): use the domain permissions above. Add **Email Sending Edit** to send mail. It must cover the zones you will connect in Mailflare.
 
 ```text
-Install Mailflare from https://github.com/digivation/mailflare in my Cloudflare account.
+Install Mailflare from https://github.com/digivation/mailflare in my Cloudflare account. First run `git clone --branch ourflare --single-branch https://github.com/digivation/mailflare.git mailflare` and use only that checkout. If using Cloudflare Git integration, select and verify `ourflare` as the production/deployment branch before importing or building; never deploy `main`.
 Ask me for my Cloudflare account ID, a scoped deployment API token, and a separate
 runtime CF_TOKEN through a secret input. Never print, commit, or place either token
 in a command argument or a tracked file. Use the deployment token only for Wrangler

@@ -6,6 +6,9 @@ const workflow = readFileSync(".github/workflows/deploy-update.yml", "utf8");
 const utils = readFileSync("src/app/api/admin/update/utils.ts", "utf8");
 const packageJson = JSON.parse(readFileSync("package.json", "utf8"));
 const lock = JSON.parse(readFileSync("package-lock.json", "utf8"));
+const readme = readFileSync("README.md", "utf8");
+const deployment = readFileSync("docs/deployment.md", "utf8");
+const selfHosting = readFileSync("docs/self-hosting.md", "utf8");
 
 test("updater source repository and branch are pinned to the fork", () => {
   assert.match(workflow, /source_repository="digivation\/mailflare"/);
@@ -20,6 +23,15 @@ test("updater source repository and branch are pinned to the fork", () => {
   assert.match(utils, /JSON\.stringify\(\{ ref \}\)/);
   assert.doesNotMatch(workflow, /UPDATE_SOURCE_REPOSITORY|hieunc229\/mailflare/);
   assert.doesNotMatch(utils, /hieunc229\/mailflare|vars\.UPDATE_SOURCE_REPOSITORY/);
+});
+
+test("fresh-install docs pin checkout and Cloudflare production branch to ourflare", () => {
+  for (const doc of [readme, deployment, selfHosting]) {
+    assert.match(doc, /--branch ourflare --single-branch https:\/\/github\.com\/digivation\/mailflare\.git/);
+    assert.doesNotMatch(doc, /deploy\.workers\.cloudflare\.com\/?\?url=https:\/\/github\.com\/digivation\/mailflare/);
+  }
+  assert.match(deployment, /select and verify `ourflare` as the production\/deployment branch/i);
+  assert.match(readme, /select and verify `ourflare` as the production\/deployment branch/i);
 });
 
 test("updater release is offered to installations on 0.5.4", () => {

@@ -7,7 +7,7 @@ A self-hosted alternative to Google Workspace. Setup **custom domain Emails**, *
 
 Run it on Cloudflare or Docker. Send and receive with Cloudflare, Resend or Amazon SES. Store files in R2, Backblaze B2 or AWS S3. Use D1, Postgres, MySQL or Turso for the database.
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/digivation/mailflare)
+Fresh installs must use the fork's `ourflare` branch. Follow the [deployment guide](docs/deployment.md) and verify the production branch before deploying; do not use Cloudflare's one-click deploy button, which may select `main`.
 
 ## Screenshots
 
@@ -64,7 +64,7 @@ New Amazon SES accounts start in a sandbox. Ask AWS for production access to lif
 
 ## Deploy
 
-1. **Deploy the app.** Click **Deploy to Cloudflare**. Keep the app name `mailflare`, or it will break.
+1. **Deploy the app.** Import the repository and select `ourflare` as the production/deployment branch. Keep the app name `mailflare`, or it will break.
 2. **Finish setup.** Open the app at `/setup` and create your admin account.
 3. **Connect a domain.** Add a domain from the same Cloudflare account, then create your first mailbox.
 
@@ -84,7 +84,7 @@ Paste this into an AI agent that has terminal access (Claude Code, Codex, Cursor
 ```text
 Install Mailflare for me from https://github.com/digivation/mailflare on my Cloudflare account.
 
-1. Read README.md, docs/deployment.md and wrangler.jsonc first.
+1. Clone the reviewed fork branch before reading/building: `git clone --branch ourflare --single-branch https://github.com/digivation/mailflare.git mailflare`. Read README.md, docs/deployment.md and wrangler.jsonc from that checkout. If using Cloudflare Git integration, select and verify `ourflare` as the production/deployment branch before importing/deploying; do not deploy `main`.
 2. Ask me for my Cloudflare account ID and two API tokens, using a secret input:
    a deploy token (for Wrangler) and a runtime token (the Worker secret CF_TOKEN).
    Never print them, commit them, or pass them as command arguments.
