@@ -301,6 +301,12 @@
       "statements": [
         "ALTER TABLE `messages` ADD `has_unsubscribe` boolean NOT NULL DEFAULT false;"
       ]
+    },
+    {
+      "name": "0008_remove_license_settings.sql",
+      "statements": [
+        "DROP TABLE IF EXISTS `license_settings`;"
+      ]
     }
   ]
 }

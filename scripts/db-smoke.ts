@@ -15,6 +15,7 @@ import { exportDatabaseRecords, restoreDatabaseRecords } from "@/lib/backups/exp
 import { getSearchIndexStatus } from "@/lib/search/index-admin";
 import { recordReputationObservation } from "@/lib/spam/repository";
 import { isUniqueConstraintError } from "@/lib/database-errors";
+import { listTableNames } from "@/db/introspect";
 
 const [url, driver] = process.argv.slice(2);
 if (!url) throw new Error("usage: db-smoke <DATABASE_URL> [driver]");
@@ -91,6 +92,20 @@ check("D1-compatible prepare().bind().first()", Number(prepared?.n) === 1);
 const batchResults = await d1.batch([d1.prepare("SELECT 1 AS one"), d1.prepare("SELECT 2 AS two")]);
 check("D1-compatible batch()", batchResults.length === 2);
 
+const backup = await exportDatabaseRecords(d1);
+const exported = JSON.parse(new TextDecoder().decode(backup)) as { tables: Record<string, Array<Record<string, unknown>>> };
+check("backup exports portable values", exported.tables.users.every((row) => typeof row.disabled === "number") && exported.tables.messages.length >= 1);
+check("retired license table absent after migrations", !(await listTableNames(d1)).has("license_settings"));
+const legacy = JSON.parse(new TextDecoder().decode(backup)) as { tables: Record<string, Array<Record<string, unknown>>>; includedTables?: string[] };
+legacy.tables.license_settings = [{ id: "legacy", plan: "ignored" }];
+legacy.includedTables?.push("license_settings");
+const legacyBytes = new TextEncoder().encode(JSON.stringify(legacy));
+await restoreDatabaseRecords(d1, legacyBytes.buffer.slice(legacyBytes.byteOffset, legacyBytes.byteOffset + legacyBytes.byteLength));
+check("legacy backup normalization discards retired licensing rows", !(await listTableNames(d1)).has("license_settings"));
+await restoreDatabaseRecords(d1, backup.buffer.slice(backup.byteOffset, backup.byteOffset + backup.byteLength) as ArrayBuffer);
+const [afterRestore] = await db.select({ subject: messages.subject, starred: messages.starred, createdAt: messages.createdAt }).from(messages).where(eq(messages.id, `msg_${stamp}`));
+check("backup restores", afterRestore?.subject === "batched" && afterRestore.starred === false && afterRestore.createdAt instanceof Date);
+
 await db.update(messages).set({ subject: "Quarterly Report" }).where(eq(messages.id, `msg_${stamp}`));
 for (const [query, expected] of [["quarterly", 1], ["subject:report", 1], ["from:x@y.z numbers", 1], ["absent-term", 0], ["-quarterly", 0]] as const) {
 	const found = await db.select({ id: messages.id }).from(messages).where(and(eq(messages.mailboxId, `mbx_${stamp}`), ...buildSearchConditions(query)));
@@ -118,13 +133,6 @@ try {
 
 const searchStatus = await getSearchIndexStatus(env);
 check("search index status", searchStatus.messages === searchStatus.indexed && searchStatus.messages >= 1);
-
-const backup = await exportDatabaseRecords(d1);
-const exported = JSON.parse(new TextDecoder().decode(backup)) as { tables: Record<string, Array<Record<string, unknown>>> };
-check("backup exports portable values", exported.tables.users.every((row) => typeof row.disabled === "number") && exported.tables.messages.length >= 1);
-await restoreDatabaseRecords(d1, backup.buffer.slice(backup.byteOffset, backup.byteOffset + backup.byteLength) as ArrayBuffer);
-const [afterRestore] = await db.select({ subject: messages.subject, starred: messages.starred, createdAt: messages.createdAt }).from(messages).where(eq(messages.id, `msg_${stamp}`));
-check("backup restores", afterRestore?.subject === "Quarterly Report" && afterRestore.starred === false && afterRestore.createdAt instanceof Date);
 
 const [settings] = await db.select().from(appSettings).where(eq(appSettings.id, "default"));
 check("seed rows present", settings?.appName === "Mailflare");

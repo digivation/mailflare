@@ -12,11 +12,14 @@ await build({ stdin: { contents: 'export * from "./src/lib/backups/export";', re
 const { exportDatabaseRecords, restoreDatabaseRecords } = await import(pathToFileURL(outfile).href);
 const { migrations } = JSON.parse(readFileSync(join(root, "src/lib/migrations/bundle.json"), "utf8"));
 
-function createDb(withRetired = true) {
+function createDb(preDrop = true) {
 	const sqlite = new Database(":memory:");
 	sqlite.pragma("foreign_keys = ON");
-	for (const migration of migrations) for (const statement of migration.statements) sqlite.exec(statement);
-	if (!withRetired) sqlite.exec("DROP TABLE IF EXISTS license_settings");
+	for (const migration of migrations) {
+		if (preDrop && migration.name === "0084_remove_license_settings.sql") continue;
+		for (const statement of migration.statements) sqlite.exec(statement);
+	}
+	if (preDrop) sqlite.exec("INSERT INTO license_settings (id, instance_id, updated_at) VALUES ('old', 'old-instance', 1)");
 	sqlite.exec("INSERT INTO users (id,email,password_hash,name,role,is_primary_admin,disabled,can_manage_mailboxes,can_manage_domains,can_manage_users,keyboard_shortcuts_enabled,spam_protection_enabled,show_full_recipient_addresses,remote_content_mode,require_second_factor,totp_enabled,created_at) VALUES ('sentinel','s@example.test','x','Sentinel','user',0,0,0,0,0,1,1,0,'allow',0,0,1)");
 	return sqlite;
 }

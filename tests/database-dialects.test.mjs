@@ -128,6 +128,12 @@ test("every dialect defines the same tables and columns", () => {
 	}
 });
 
+test("retired license table is absent from the live schema and all migrated dialects", () => {
+	assert.equal("license_settings" in schemas.sqlite, false);
+	for (const directory of ["drizzle/migrations", "drizzle/migrations-pg", "drizzle/migrations-mysql"])
+		assert.equal(migrationTables(directory).has("license_settings"), false, directory);
+});
+
 test("MySQL never indexes a TEXT column", () => {
 	for (const [table, { columns, indexed }] of Object.entries(schemas.mysql)) {
 		for (const name of indexed) {
@@ -144,12 +150,21 @@ test("MySQL keeps every index under the InnoDB key size limit", () => {
 	}
 });
 
-const migrationTables = (directory) =>
-	new Set(
-		readdirSync(join(root, directory))
-			.filter((name) => name.endsWith(".sql"))
-			.flatMap((name) => [...readFileSync(join(root, directory, name), "utf8").matchAll(/CREATE TABLE [`"]?(\w+)[`"]?/gi)].map((match) => match[1])),
-	);
+const migrationTables = (directory, suppliedMigrations) => {
+	const live = new Set();
+	const migrations = suppliedMigrations ?? readdirSync(join(root, directory)).filter((name) => name.endsWith(".sql")).sort().map((name) => [name, readFileSync(join(root, directory, name), "utf8")]);
+	for (const [, sql] of migrations) {
+		for (const match of sql.matchAll(/\b(CREATE|DROP)\s+TABLE\s+(?:IF\s+(?:NOT\s+)?EXISTS\s+)?[`"]?(\w+)[`"]?/gi)) {
+			if (match[1].toUpperCase() === "CREATE") live.add(match[2]);
+			else live.delete(match[2]);
+		}
+	}
+	return live;
+};
+
+test("migration table tracker removes tables after DROP TABLE", () => {
+	assert.equal(migrationTables("", [["0001_create.sql", 'CREATE TABLE "old_table" (id int);'], ["0002_drop.sql", 'DROP TABLE IF EXISTS "old_table";']]).has("old_table"), false);
+});
 
 for (const [dialect, directory] of [["postgres", "drizzle/migrations-pg"], ["mysql", "drizzle/migrations-mysql"], ["sqlite", "drizzle/migrations"]]) {
 	// SQLite's history includes tables later dropped; its coverage is checked by backup-table-list.test.mjs.
