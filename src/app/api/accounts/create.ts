@@ -9,7 +9,6 @@ import { rollbackEmailRoutingRuleChanges } from "@/lib/cloudflare-api";
 import type { CfEmailRoutingRuleChange } from "@/lib/cloudflare-api.types";
 import { normalizeRecipientLocalPart } from "@/lib/email/recipient-address";
 import { newId } from "@/lib/ids";
-import { getAccountSeatError } from "@/lib/licenses/seats";
 import { ensureMailboxDomainRouting } from "@/lib/mailboxes/domain-addresses";
 import type { CreateUserAccountInput } from "./types";
 import { accountListItemFromUser, domainOwnerIdsForAdmin, getDomainForAdmin } from "./utils";
@@ -22,8 +21,6 @@ type AccountAdminActor = {
 
 /** Shared by dashboard and admin API/MCP account creation. */
 export async function createAccountResponse(env: CloudflareEnv, actor: AccountAdminActor, input: CreateUserAccountInput) {
-	const seatError = await getAccountSeatError(env);
-	if (seatError) return NextResponse.json({ error: seatError }, { status: 403 });
 	const db = getDb(env);
 	const adminUserId = actor.id;
 	const domainOwnerIds = domainOwnerIdsForAdmin(actor);

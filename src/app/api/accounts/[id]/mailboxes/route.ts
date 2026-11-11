@@ -3,12 +3,12 @@ import { NextResponse } from "next/server";
 import { getDb } from "@/db";
 import { domains, mailboxes } from "@/db/schema";
 import { canManageUserAccount } from "@/lib/auth/admin";
-import { requireTeamAdmin } from "../../utils";
+import { requireAdminSession } from "../../utils";
 import { selectAccountById } from "../utils";
 import type { AccountRouteParams } from "../types";
 
 export async function GET(request: Request, { params }: AccountRouteParams) {
-	const access = await requireTeamAdmin(request);
+	const access = await requireAdminSession(request);
 	if (access.error) return access.error;
 	const { id } = await params;
 	const db = getDb(access.env);

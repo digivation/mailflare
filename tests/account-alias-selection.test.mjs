@@ -18,7 +18,12 @@ await build({
 			export { generateApiKey } from "./src/lib/api-keys.ts";
 			export { createUserAccountSchema } from "./src/lib/validators.ts";
 			export { POST as dashboardCreate } from "./src/app/api/accounts/route.ts";
+			export { GET as dashboardList } from "./src/app/api/accounts/route.ts";
+			export { PATCH as dashboardUpdate } from "./src/app/api/accounts/[id]/route.ts";
+			export { POST as dashboardRestore } from "./src/app/api/accounts/[id]/restore/route.ts";
 			export { POST as apiCreate } from "./src/app/api/v1/accounts/route.ts";
+			export { GET as apiList } from "./src/app/api/v1/accounts/route.ts";
+			export { POST as apiMailboxCreate } from "./src/app/api/v1/mailboxes/route.ts";
 			export { registerAdminMcpTools } from "./src/lib/mcp/admin-tools.ts";
 			export { getMailboxDomainAddresses } from "./src/lib/mailboxes/domain-addresses.ts";
 			export { resolveInboundAddress } from "./src/lib/email/routing.ts";
@@ -39,8 +44,9 @@ await build({
 });
 const {
 	SqliteDatabase, applyMigrations, getDb, createSession, generateApiKey, createUserAccountSchema,
-	dashboardCreate, apiCreate, registerAdminMcpTools, getMailboxDomainAddresses, resolveInboundAddress, getAuthorizedSenderAddress,
-} = await import(pathToFileURL(join(directory, "entry.mjs")).href);
+			dashboardCreate, apiCreate, registerAdminMcpTools, getMailboxDomainAddresses, resolveInboundAddress, getAuthorizedSenderAddress,
+		dashboardList, dashboardUpdate, dashboardRestore, apiList, apiMailboxCreate,
+	} = await import(pathToFileURL(join(directory, "entry.mjs")).href);
 const key = await generateApiKey();
 
 async function fixture(t, { rules = [], failAddress, slowAddress } = {}) {
@@ -56,8 +62,6 @@ async function fixture(t, { rules = [], failAddress, slowAddress } = {}) {
 			('two', 'admin', 'two.test', 'zone-two', 'active', 1),
 			('pending', 'admin', 'pending.test', 'zone-pending', 'pending', 1),
 			('foreign', 'other', 'foreign.test', 'zone-foreign', 'active', 1);
-		INSERT INTO license_settings (id, instance_id, plan, state, features, updated_at)
-			VALUES ('default', 'test-instance', 'team', 'active', '[]', 1);
 	`);
 	database.db.prepare("INSERT INTO api_keys (id, user_id, name, prefix, key_hash, key_sha256, scopes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
 		.run("key", "admin", "Test", key.prefix, key.hash, key.sha256, '["accounts"]', 1);
@@ -65,6 +69,11 @@ async function fixture(t, { rules = [], failAddress, slowAddress } = {}) {
 	globalThis.__mailflareNodeEnv = env;
 	t.after(() => { delete globalThis.__mailflareNodeEnv; });
 	const session = await createSession(env, "admin");
+	const request = (path, method = "GET", body, token = session) => new Request(`https://mailflare.test${path}`, {
+		method,
+		headers: { Authorization: `Bearer ${token}`, ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
+		...(body === undefined ? {} : { body: JSON.stringify(body) }),
+	});
 	const currentRules = structuredClone(rules);
 	const calls = [];
 	let nextRule = 0;
@@ -104,7 +113,7 @@ async function fixture(t, { rules = [], failAddress, slowAddress } = {}) {
 		const row = database.db.prepare("SELECT * FROM mailboxes WHERE local_part = 'sam'").get();
 		return row && { id: row.id, userId: row.user_id, domainId: row.domain_id, localPart: row.local_part, useAllDomains: !!row.use_all_domains };
 	};
-	return { database, env, db: getDb(env), post, mailbox, calls, currentRules };
+	return { database, env, db: getDb(env), post, mailbox, calls, currentRules, request, session };
 }
 
 for (const kind of ["dashboard", "api"]) {
@@ -232,28 +241,68 @@ for (const enabled of [true, false]) {
 	});
 }
 
-test("account creation still enforces admin authorization and the Team license", async (t) => {
+test("account creation keeps admin authorization and needs no license", async (t) => {
 	const f = await fixture(t);
 	assert.equal((await f.post("api", {}, "invalid-test-key")).status, 401);
 	assert.equal((await f.post("dashboard", {}, "invalid-test-session")).status, 403);
-	f.database.db.exec("UPDATE license_settings SET state = 'inactive'");
-	assert.equal((await f.post("api")).status, 403);
-	assert.equal((await f.post("dashboard")).status, 403);
+	assert.equal((await f.post("api")).status, 201);
+	assert.equal((await f.post("dashboard", { username: "jane" })).status, 201);
+	const listed = await dashboardList(f.request("/api/accounts"));
+	assert.equal(listed.status, 200);
+	assert.equal("seats" in await listed.json(), false);
+	assert.equal((await apiList(f.request("/api/v1/accounts", "GET", undefined, key.fullKey))).status, 200);
+});
+
+test("account API keys still require account scope and an active admin owner", async (t) => {
+	const f = await fixture(t);
+	const wrongScope = await generateApiKey();
+	f.database.db.prepare("INSERT INTO api_keys (id, user_id, name, prefix, key_hash, key_sha256, scopes, created_at) VALUES (?, 'admin', 'Wrong scope', ?, ?, ?, ?, 1)")
+		.run("wrong-scope", wrongScope.prefix, wrongScope.hash, wrongScope.sha256, '["mailboxes"]');
+	f.database.db.exec("INSERT INTO users (id, email, password_hash, name, role, disabled, created_at) VALUES ('inactive', 'inactive@one.test', 'hash', 'Inactive', 'admin', 1, 1)");
+	const inactiveKey = await generateApiKey();
+	f.database.db.prepare("INSERT INTO api_keys (id, user_id, name, prefix, key_hash, key_sha256, scopes, created_at) VALUES (?, 'inactive', 'Inactive owner', ?, ?, ?, ?, 1)")
+		.run("inactive-key", inactiveKey.prefix, inactiveKey.hash, inactiveKey.sha256, '["accounts"]');
+	assert.equal((await f.post("api", {}, wrongScope.fullKey)).status, 401);
+	assert.equal((await f.post("api", {}, inactiveKey.fullKey)).status, 401);
 	assert.equal(f.calls.length, 0);
 });
 
-test("a Pro license creates accounts only while seats remain; Team and unlimited Pro have no limit", async (t) => {
+test("a scoped admin API key can create shared mailboxes without licensing", async (t) => {
 	const f = await fixture(t);
-	const users = () => f.database.db.prepare("SELECT count(*) AS count FROM users WHERE disabled = 0").get().count;
-	f.database.db.exec(`UPDATE license_settings SET plan = 'pro', seat_limit = ${users()}`);
-	assert.equal((await f.post("api")).status, 403, "no seat left");
-	f.database.db.exec(`UPDATE license_settings SET seat_limit = ${users() + 1}`);
-	assert.equal((await f.post("api", { username: "seat-one" })).status, 201);
-	assert.equal((await f.post("api", { username: "seat-two" })).status, 403, "seat just used");
-	f.database.db.exec("UPDATE license_settings SET seat_limit = NULL");
-	assert.equal((await f.post("api", { username: "seat-three" })).status, 201);
-	f.database.db.exec("UPDATE license_settings SET plan = 'team', seat_limit = 1");
-	assert.equal((await f.post("api", { username: "seat-four" })).status, 201);
+	const mailboxKey = await generateApiKey();
+	f.database.db.prepare("INSERT INTO api_keys (id, user_id, name, prefix, key_hash, key_sha256, scopes, created_at) VALUES (?, 'admin', 'Mailboxes', ?, ?, ?, ?, 1)")
+		.run("mailboxes-key", mailboxKey.prefix, mailboxKey.hash, mailboxKey.sha256, '["mailboxes"]');
+	const response = await apiMailboxCreate(f.request("/api/v1/mailboxes", "POST", { domainId: "one", localPart: "team", type: "shared" }, mailboxKey.fullKey));
+	assert.equal(response.status, 201);
+	assert.equal((await response.json()).type, "shared");
+});
+
+test("account re-enable and restore are not blocked by seat limits", async (t) => {
+	const f = await fixture(t);
+	assert.equal((await f.post("api")).status, 201);
+	const target = f.database.db.prepare("SELECT id FROM users WHERE email = 'sam@one.test'").get();
+	f.database.db.prepare("UPDATE users SET disabled = 1 WHERE id = ?").run(target.id);
+	const reenabled = await dashboardUpdate(f.request(`/api/accounts/${target.id}`, "PATCH", {
+		name: "sam", role: "user", disabled: false, canManageMailboxes: false,
+	}), { params: Promise.resolve({ id: target.id }) });
+	assert.equal(reenabled.status, 200);
+	f.database.db.prepare("UPDATE users SET disabled = 1, deleted_at = 1 WHERE id = ?").run(target.id);
+	const restored = await dashboardRestore(f.request(`/api/accounts/${target.id}/restore`, "POST"), { params: Promise.resolve({ id: target.id }) });
+	assert.equal(restored.status, 200);
+	assert.deepEqual({ ...f.database.db.prepare("SELECT disabled, deleted_at FROM users WHERE id = ?").get(target.id) }, { disabled: 0, deleted_at: null });
+});
+
+test("non-primary account managers cannot change account roles", async (t) => {
+	const f = await fixture(t);
+	f.database.db.exec("INSERT INTO users (id, email, password_hash, name, role, can_manage_users, created_by_user_id, created_at) VALUES ('manager', 'manager@one.test', 'hash', 'Manager', 'admin', 1, 'admin', 1)");
+	const managerSession = await createSession(f.env, "manager");
+	assert.equal((await f.post("api")).status, 201);
+	const target = f.database.db.prepare("SELECT id FROM users WHERE email = 'sam@one.test'").get();
+	const updated = await dashboardUpdate(f.request(`/api/accounts/${target.id}`, "PATCH", {
+		name: "sam", role: "admin", disabled: false, canManageMailboxes: false,
+	}, managerSession), { params: Promise.resolve({ id: target.id }) });
+	assert.equal(updated.status, 403);
+	assert.equal(f.database.db.prepare("SELECT role FROM users WHERE id = ?").get(target.id).role, "user");
 });
 
 for (const separateDomains of [false, true]) {
@@ -294,9 +343,9 @@ for (const kind of ["dashboard", "api"]) {
 			INSERT INTO users (id, email, password_hash, name, role, can_manage_mailboxes, can_manage_domains, can_manage_users, created_by_user_id, created_at)
 			VALUES ('manager', 'manager@one.test', 'hash', 'Manager', 'admin', 1, 1, 1, 'admin', 1)
 		`);
-		const managerKey = generateApiKey();
-		f.database.db.prepare("INSERT INTO api_keys (id, user_id, name, prefix, key_hash, scopes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
-			.run("manager-key", "manager", "Manager", managerKey.prefix, managerKey.hash, '["accounts"]', 1);
+		const managerKey = await generateApiKey();
+		f.database.db.prepare("INSERT INTO api_keys (id, user_id, name, prefix, key_hash, key_sha256, scopes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+			.run("manager-key", "manager", "Manager", managerKey.prefix, managerKey.hash, managerKey.sha256, '["accounts"]', 1);
 		const managerSession = await createSession(f.env, "manager");
 		const token = kind === "dashboard" ? managerSession : managerKey.fullKey;
 		const created = await f.post(kind, { useAllDomains: false }, token);

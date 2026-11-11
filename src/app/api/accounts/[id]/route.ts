@@ -3,8 +3,7 @@ import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { users } from "@/db/schema";
 import { updateManagedAccountSchema } from "@/lib/validators";
-import { requireTeamAdmin } from "../utils";
-import { getAccountSeatError } from "@/lib/licenses/seats";
+import { requireAdminSession } from "../utils";
 import { getLicenseEntitlements } from "@/lib/licenses/service";
 import { canManageUserAccount, canManageUsers, isPrimaryAdmin } from "@/lib/auth/admin";
 import type { AccountRouteParams } from "./types";
@@ -16,7 +15,7 @@ import { createAuditLog } from "@/lib/mailboxes/audit";
 import { authError } from "@/lib/http/auth-error";
 
 export async function GET(request: Request, { params }: AccountRouteParams) {
-	const access = await requireTeamAdmin(request);
+	const access = await requireAdminSession(request);
 	if (access.error) return access.error;
 	const { id } = await params;
 	const account = await selectAccountById(getDb(access.env), id);
@@ -49,7 +48,7 @@ export async function GET(request: Request, { params }: AccountRouteParams) {
 }
 
 export async function PATCH(request: Request, { params }: AccountRouteParams) {
-	const access = await requireTeamAdmin(request);
+	const access = await requireAdminSession(request);
 	if (access.error) return access.error;
 	const { id } = await params;
 	const db = getDb(access.env);
@@ -77,10 +76,6 @@ export async function PATCH(request: Request, { params }: AccountRouteParams) {
 	const canForwardEmail = (await getLicenseEntitlements(access.env)).canForwardEmail;
 	if (!canForwardEmail && parsed.data.forwardingEmail && parsed.data.forwardingEmail !== account.forwardingEmail) {
 		return NextResponse.json({ error: "A Pro or Team license is required for email forwarding" }, { status: 403 });
-	}
-	if (account.disabled && !parsed.data.disabled) {
-		const seatError = await getAccountSeatError(access.env);
-		if (seatError) return NextResponse.json({ error: seatError }, { status: 403 });
 	}
 	// A passkey-only account must be recovered through a passkey enrolment link,
 	// not by silently giving it a password that bypasses its recovery policy.

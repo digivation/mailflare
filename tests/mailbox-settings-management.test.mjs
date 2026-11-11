@@ -20,6 +20,7 @@ await build({
 			export * as detail from "./src/app/api/mailboxes/[id]/route.ts";
 			export * as aliases from "./src/app/api/mailboxes/[id]/aliases/route.ts";
 			export * as avatar from "./src/app/api/mailboxes/[id]/avatar/route.ts";
+			export * as mailboxCollection from "./src/app/api/mailboxes/route.ts";
 			export * as accountMailboxes from "./src/app/api/accounts/[id]/mailboxes/route.ts";
 		`,
 		resolveDir: root,
@@ -36,7 +37,7 @@ await build({
 	logLevel: "silent",
 });
 const { SqliteDatabase, applyMigrations, getDb, createSession, getMailboxAccessLevel, listAccessibleMailboxIds,
-	getAuthorizedSenderAddress, detail, aliases, avatar, accountMailboxes } = await import(pathToFileURL(join(directory, "entry.mjs")).href);
+	getAuthorizedSenderAddress, detail, aliases, avatar, mailboxCollection, accountMailboxes } = await import(pathToFileURL(join(directory, "entry.mjs")).href);
 const context = id => ({ params: Promise.resolve({ id }) });
 
 async function fixture(t) {
@@ -116,7 +117,8 @@ async function fixture(t) {
 test("primary admin can open indirectly created accounts and edit their primary mailbox identity", async t => {
 	const f = await fixture(t);
 	const listed = await accountMailboxes.GET(f.request("primary", "/api/accounts/sam/mailboxes"), context("sam"));
-	assert.equal(listed.status, 403, "account administration remains gated until Phase 2");
+	assert.equal(listed.status, 200);
+	assert.deepEqual((await listed.json()).mailboxes.map(row => row.id).sort(), ["m-disabled", "m-sales", "m-sam"]);
 	const response = await f.read("primary", "m-sam");
 	assert.equal(response.status, 200);
 	const { mailbox } = await response.json();
@@ -152,7 +154,7 @@ test("user managers can configure ordinary accounts but cannot manage administra
 		assert.equal((await f.read("manager", id)).status, 200);
 		assert.equal((await f.patch("manager", id, { displayName: "Managed" })).status, 200);
 	}
-	assert.equal((await accountMailboxes.GET(f.request("manager", "/api/accounts/remote/mailboxes"), context("remote"))).status, 403);
+	assert.equal((await accountMailboxes.GET(f.request("manager", "/api/accounts/remote/mailboxes"), context("remote"))).status, 200);
 	for (const id of ["m-owner", "m-other", "m-shared"]) {
 		assert.equal((await f.read("manager", id)).status, 404);
 		assert.equal((await f.patch("manager", id, { displayName: "Denied" })).status, 404);
@@ -193,6 +195,18 @@ test("administrative mailbox settings need no license and remain separate from m
 	assert.equal((await f.patch("primary", "m-sam", { displayName: "Managed" })).status, 200);
 	assert.equal((await f.patch("sam", "m-sales", { displayName: "My Sales" })).status, 200);
 	assert.equal(await getMailboxAccessLevel(f.db, { id: "primary", role: "admin" }, "m-sam"), null);
+});
+
+test("shared mailbox creation is available to admins and still denied to ordinary users", async t => {
+	const f = await fixture(t);
+	const list = await mailboxCollection.GET(f.request("primary", "/api/mailboxes"));
+	assert.equal(list.status, 200);
+	assert.equal((await list.json()).canCreateShared, true);
+	const body = { domainId: "one", localPart: "ordinary-shared", type: "shared" };
+	assert.equal((await mailboxCollection.POST(f.request("sam", "/api/mailboxes", "POST", body))).status, 403);
+	const created = await mailboxCollection.POST(f.request("primary", "/api/mailboxes", "POST", { ...body, localPart: "admin-shared" }));
+	assert.equal(created.status, 200);
+	assert.equal((await created.json()).type, "shared");
 });
 
 test("administrators can manage aliases within the mailbox's domain-owner scope", async t => {

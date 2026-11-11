@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/db";
-import { requireTeamAdmin } from "../../utils";
+import { requireAdminSession } from "../../utils";
 import { canManageUserAccount, isPrimaryAdmin } from "@/lib/auth/admin";
 import { selectAccountById } from "../utils";
 import { readJsonBody } from "@/lib/http/request";
@@ -18,7 +18,7 @@ import type { AccountRouteParams } from "../types";
  * credential and never reads mail.
  */
 export async function POST(request: Request, { params }: AccountRouteParams) {
-	const access = await requireTeamAdmin(request);
+	const access = await requireAdminSession(request);
 	if (access.error) return access.error;
 	const { id } = await params;
 	const account = await selectAccountById(getDb(access.env), id);
