@@ -167,7 +167,7 @@ The assistant panel no longer exposes MCP key management. External MCP clients c
 
 ## Updating Mailflare
 
-The **Update Mailflare** button in the admin dashboard dispatches `.github/workflows/deploy-update.yml` in the installation repository. The workflow replaces the installation branch's complete tracked tree with `digivation/mailflare`'s `ourflare` branch, commits that replacement, and pushes it. This avoids merge conflicts between independently created installation and source histories. Target-only tracked files and code changes are intentionally removed; repository variables, secrets, and other GitHub or Cloudflare configuration remain unchanged. A connected Cloudflare Git integration then builds and deploys the change.
+The **Update Mailflare** button in the admin dashboard dispatches `.github/workflows/deploy-update.yml` in the installation repository. The workflow replaces the installation branch's complete tracked tree with `digivation/mailflare`'s `ourflare` branch, commits that replacement, and pushes it. The source fork must be public because version checks and workflow fetches do not use a source-repository credential. This avoids merge conflicts between independently created installation and source histories. Target-only tracked files and code changes are intentionally removed; repository variables, secrets, and other GitHub or Cloudflare configuration remain unchanged. A connected Cloudflare Git integration then builds and deploys the change.
 
 ### Auto update
 
@@ -188,7 +188,7 @@ Configure the token and repository details in both Cloudflare and GitHub:
 | Cloudflare Worker | `GITHUB_UPDATE_REF` | Optional variable | The installation branch to update; omit it to use the repository's default branch |
 | GitHub repository → Actions | `MAILFLARE_UPDATE_TOKEN` | Repository secret | The same fine-grained personal access token |
 
-The same token can be used for `GITHUB_UPDATE_TOKEN` and `MAILFLARE_UPDATE_TOKEN` when it has all three permissions above. Keep both values secret and limit the token's repository access to the installation repository.
+The same token can be used for `GITHUB_UPDATE_TOKEN` and `MAILFLARE_UPDATE_TOKEN` when it has all three permissions above. Keep both values secret and limit the token's repository access to the installation repository. The update card offers only strictly newer versions; a release with the same package version will not be offered. Increment `package.json` (and its lockfile version) for each updater release.
 
 Make sure `.github/workflows/deploy-update.yml` exists on the installation branch. Before the first update, install it manually by copying the [Mailflare fork updater](https://github.com/digivation/mailflare/blob/ourflare/.github/workflows/deploy-update.yml). Replace any older updater: source repository and branch are pinned in the workflow and dashboard, and repository variables cannot redirect updates. A running workflow cannot create or replace itself until the current workflow has been installed manually.
 

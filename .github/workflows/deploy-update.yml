@@ -39,8 +39,6 @@ jobs:
           else
             git remote add upstream "${upstream_url}"
           fi
-          git fetch --no-tags upstream
-
           if ! git fetch --no-tags upstream "refs/heads/${source_branch}:refs/remotes/upstream/${source_branch}"; then
             echo "::error::Could not fetch ${source_repository}@${source_branch}."
             exit 1
