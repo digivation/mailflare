@@ -39,7 +39,7 @@ const { SqliteDatabase, applyMigrations, getDb, createSession, getMailboxAccessL
 	getAuthorizedSenderAddress, detail, aliases, avatar, accountMailboxes } = await import(pathToFileURL(join(directory, "entry.mjs")).href);
 const context = id => ({ params: Promise.resolve({ id }) });
 
-async function fixture(t, plan = "team") {
+async function fixture(t) {
 	const database = new SqliteDatabase(":memory:");
 	t.after(() => database.db.close());
 	await applyMigrations(database, join(root, "drizzle/migrations"));
@@ -71,10 +71,7 @@ async function fixture(t, plan = "team") {
 			('m-shared', 'primary', 'one', 'support', 'Support', 'shared', 0, 0, 1),
 			('m-other-shared', 'other-admin', 'two', 'team', 'Team', 'shared', 0, 0, 1);
 		UPDATE users SET avatar_key='avatars/sam' WHERE id='sam';
-		INSERT INTO license_settings (id, instance_id, plan, state, features, updated_at)
-			VALUES ('default', 'settings-test', 'team', 'active', '[]', 1);
 	`);
-	sql.prepare("UPDATE license_settings SET plan=?, state=? WHERE id='default'").run(plan, plan === "community" ? "inactive" : "active");
 	const objects = new Map([["avatars/sam", new Uint8Array([1, 2, 3])]]);
 	const env = {
 		DB: database, MAILFLARE_RUNTIME: "node", CF_TOKEN: "test-only",
@@ -119,8 +116,7 @@ async function fixture(t, plan = "team") {
 test("primary admin can open indirectly created accounts and edit their primary mailbox identity", async t => {
 	const f = await fixture(t);
 	const listed = await accountMailboxes.GET(f.request("primary", "/api/accounts/sam/mailboxes"), context("sam"));
-	assert.equal(listed.status, 200);
-	assert.deepEqual((await listed.json()).mailboxes.map(row => row.id).sort(), ["m-disabled", "m-sales", "m-sam"]);
+	assert.equal(listed.status, 403, "account administration remains gated until Phase 2");
 	const response = await f.read("primary", "m-sam");
 	assert.equal(response.status, 200);
 	const { mailbox } = await response.json();
@@ -156,7 +152,7 @@ test("user managers can configure ordinary accounts but cannot manage administra
 		assert.equal((await f.read("manager", id)).status, 200);
 		assert.equal((await f.patch("manager", id, { displayName: "Managed" })).status, 200);
 	}
-	assert.equal((await accountMailboxes.GET(f.request("manager", "/api/accounts/remote/mailboxes"), context("remote"))).status, 200);
+	assert.equal((await accountMailboxes.GET(f.request("manager", "/api/accounts/remote/mailboxes"), context("remote"))).status, 403);
 	for (const id of ["m-owner", "m-other", "m-shared"]) {
 		assert.equal((await f.read("manager", id)).status, 404);
 		assert.equal((await f.patch("manager", id, { displayName: "Denied" })).status, 404);
@@ -191,13 +187,12 @@ test("owners and shared mailbox grants keep their existing settings permissions"
 	assert.equal((await f.patch("sam", "m-shared", { displayName: "Shared Updated" })).status, 200);
 });
 
-test("administrative mailbox settings preserve the account license requirement", async t => {
-	for (const plan of ["community", "pro"]) {
-		const f = await fixture(t, plan);
-		assert.equal((await f.read("primary", "m-sam")).status, plan === "pro" ? 200 : 404);
-		assert.equal((await f.patch("primary", "m-sam", { displayName: "Licensed" })).status, plan === "pro" ? 200 : 404);
-		assert.equal((await f.patch("sam", "m-sales", { displayName: "My Sales" })).status, 200);
-	}
+test("administrative mailbox settings need no license and remain separate from message access", async t => {
+	const f = await fixture(t);
+	assert.equal((await f.read("primary", "m-sam")).status, 200);
+	assert.equal((await f.patch("primary", "m-sam", { displayName: "Managed" })).status, 200);
+	assert.equal((await f.patch("sam", "m-sales", { displayName: "My Sales" })).status, 200);
+	assert.equal(await getMailboxAccessLevel(f.db, { id: "primary", role: "admin" }, "m-sam"), null);
 });
 
 test("administrators can manage aliases within the mailbox's domain-owner scope", async t => {

@@ -1,7 +1,7 @@
-import { eq } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { getDb } from "@/db";
-import { domains, mailboxAccess, mailboxes } from "@/db/schema";
-import { isTeamMailboxSharingEnabled } from "@/lib/mailboxes/access-utils";
+import { domains, mailboxAccess, mailboxes, users } from "@/db/schema";
+import { hasMailboxPermission } from "@/lib/mailboxes/access";
 import type { NewMessageNotification, AgentDraftNotification } from "./types";
 import { sendPushNotifications } from "@/lib/push/server";
 import { sendNativePush } from "@/lib/push/native";
@@ -28,26 +28,28 @@ export async function getMailboxNotificationUserIds(
 ): Promise<string[]> {
 	const db = getDb(env);
 	const mailboxRows = await db
-		.select({ domainOwnerUserId: domains.userId, type: mailboxes.type })
+		.select({ domainOwnerUserId: domains.userId, type: mailboxes.type, disabled: mailboxes.disabled })
 		.from(mailboxes)
 		.innerJoin(domains, eq(mailboxes.domainId, domains.id))
 		.where(eq(mailboxes.id, mailboxId))
 		.limit(1);
-	const sharedUserIds = mailboxRows[0]?.type === "shared" && await isTeamMailboxSharingEnabled(db)
+	const mailbox = mailboxRows[0];
+	if (!mailbox || mailbox.disabled) return [];
+	const sharedUserIds = mailbox.type === "shared"
 		? (await db
-			.select({ userId: mailboxAccess.userId })
+			.select({ userId: mailboxAccess.userId, permission: mailboxAccess.permission })
 			.from(mailboxAccess)
 			.where(eq(mailboxAccess.mailboxId, mailboxId)))
+			.filter((access) => hasMailboxPermission(access.permission, "read_only"))
 			.map((access) => access.userId)
 		: [];
-
-	return [
-		...new Set([
-			ownerUserId,
-			mailboxRows[0]?.domainOwnerUserId,
-			...sharedUserIds,
-		].filter((userId): userId is string => !!userId)),
-	];
+	const recipientIds = [...new Set([ownerUserId, mailbox.domainOwnerUserId, ...sharedUserIds].filter((id): id is string => !!id))];
+	if (!recipientIds.length) return [];
+	return (await db
+		.select({ id: users.id })
+		.from(users)
+		.where(and(inArray(users.id, recipientIds), eq(users.disabled, false), isNull(users.deletedAt))))
+		.map((user) => user.id);
 }
 
 export async function notifyUsersOfNewMessage(

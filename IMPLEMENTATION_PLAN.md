@@ -21,6 +21,14 @@ Prepared on 2026-11-10 for `/home/matthew/Development/mailflare`, branch `ourfla
 
 **Unresolved:** the plan says the tests target Node 24, but `Dockerfile:3` deploys Node 22. The baseline now represents the actual self-hosted Compose/Docker runtime; a separate Node 24 comparison remains pending until the project resolves which runtime the test target represents. The earlier Node 26 results are superseded for deployment-runtime comparisons. Database engines and provider credentials were not checked.
 
+### Phase 1 — complete
+
+- Removed licensing checks from mailbox access/listing, mailbox settings access, and new-message notification recipient resolution; deleted `src/lib/mailboxes/access-utils.ts`. Notification recipients remain limited to active accounts, enabled mailboxes, and valid readable delegates, while preserving active owner/domain-owner recipients.
+- Added grant-level access/revocation and notification coverage; removed license fixtures from the focused route tests. Kept account-management API guards unchanged for Phase 2.
+- Focused Compose suite on Node `v22.23.4`: `node --test tests/self-hosted-team.test.mjs tests/mailbox-settings-management.test.mjs tests/messages-route-performance.test.mjs tests/jmap-request-memo.test.mjs` — **22 passed, 0 failed**.
+- `npx tsc --noEmit --incremental false` still exits 2 on the two Phase 0 diagnostics (`src/app/page.tsx` missing `calendarEnabled`/`driveEnabled`; `src/lib/domains/resend-receiving.ts` missing inferred `status`). No diagnostics in Phase 1 files.
+- Commit: `refactor(mailboxes): remove commercial sharing gates, preserve grants`.
+
 ### Prepared patch: inspected, not applied
 
 File: `mailflare-self-hosted-team.patch` at the repository root.
