@@ -8,10 +8,10 @@ Prepared on 2026-11-10 for `/home/matthew/Development/mailflare`, branch `ourfla
 
 ## Progress
 
-### Phase 0 — complete
+### Phase 0 — Node 26 baseline verified; supported-runtime baseline pending
 
 - Commit: `chore(plan): record implementation baseline`.
-- Runtime: Node `v26.13.0`, npm `12.2.2` (the plan targets Node 24); `npm ci` succeeded from the lockfile. npm reported 35 dependency audit findings (1 low, 20 moderate, 11 high, 3 critical); install scripts were blocked by the configured npm policy.
+- Runtime: Node `v26.13.0`, npm `12.2.2`; this is **not** the supported-runtime baseline. The test plan targets Node 24, while `Dockerfile:3` uses Node 22 for the self-hosted deployment. `npm ci` succeeded from the lockfile on Node 26. npm reported 35 dependency audit findings (1 low, 20 moderate, 11 high, 3 critical); install scripts were blocked by the configured npm policy.
 - `node --test tests/*.test.mjs`: exit 1, 567 tests, 556 pass, 9 fail, 2 skipped. Failures: two account-alias manager cases fail inserting `api_keys.prefix` (NOT NULL); six `manual-dns-checks.test.mjs` assertions fail; `layout-mail-search-provider.test.mjs` has asynchronous activity after test end and then cannot import its cleaned-up temp bundle. Re-running the DNS and layout test files separately reproduced those failures. The alias failures were also reproduced when run with that test file.
 - `npx tsc --noEmit --incremental false`: exit 2, existing errors in `src/app/page.tsx` (missing `calendarEnabled`/`driveEnabled`) and `src/lib/domains/resend-receiving.ts` (`status` absent from inferred type).
 - `npm run lint`: exit 1, numerous existing React Compiler/hooks and TypeScript lint errors across the source tree; also emitted warnings. A first concurrent lint run panicked while tests were creating temporary bundles; serial rerun completed and returned the source diagnostics.
@@ -19,7 +19,7 @@ Prepared on 2026-11-10 for `/home/matthew/Development/mailflare`, branch `ourfla
 - Reviewed `tests/account-alias-selection.test.mjs`, `tests/manual-dns-checks.test.mjs`, `CLAUDE.md`, and the installed Next package. No Next `AGENTS.md` was present.
 - No application source changes. No database/provider smoke was run. Known baseline failures are recorded for comparison; do not fix unrelated defects in feature commits.
 
-**Unresolved:** rerun baseline on Node 24 if available; determine/repair the listed pre-existing test, type and lint failures separately from the licensing-removal work. Database engines and provider credentials were not checked.
+**Unresolved / phase acceptance pending:** rerun baseline on the agreed supported runtime (reconcile Node 24 test target with Node 22 Docker runtime first). Until then, none of the Node 26 failures above may be treated as established deployment-runtime failures. Determine/repair the listed pre-existing test, type and lint failures separately from the licensing-removal work. Database engines and provider credentials were not checked.
 
 ### Prepared patch: inspected, not applied
 
