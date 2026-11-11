@@ -1532,8 +1532,6 @@
 	"adminKeys.allowMcpHint": "Use this key with an MCP client to manage only the admin areas selected below. It cannot read or send mail.",
 	"adminKeys.createKey": "Create key",
 	"branding.title": "Branding",
-	"branding.buyPro": "Buy Pro · $29",
-	"branding.buyTeam": "Buy Team · from $249",
 	"branding.updated": "Branding updated",
 	"branding.saveFailed": "Unable to save branding",
 	"branding.description": "Customize the app identity shown to everyone using this installation.",

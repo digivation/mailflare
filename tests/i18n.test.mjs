@@ -113,6 +113,18 @@ test("every registered catalog has the English keys and nonempty messages and la
 	}
 });
 
+test("commercial branding keys are absent and account descriptions stay localized", async () => {
+	for (const code of Object.keys(i18n.locales)) {
+		const catalog = await i18n.loadMessages(code);
+		assert.equal("branding.buyPro" in catalog, false, `${code}: obsolete Pro purchase key`);
+		assert.equal("branding.buyTeam" in catalog, false, `${code}: obsolete Team purchase key`);
+		if (code !== "en") {
+			assert.notEqual(catalog["admin.section.accounts"], en["admin.section.accounts"], `${code}: accounts description fell back to English`);
+			assert.notEqual(catalog["adminKeys.perm.accountsDesc"], en["adminKeys.perm.accountsDesc"], `${code}: API description fell back to English`);
+		}
+	}
+});
+
 test("missing, invalid and unsupported locale values fall back to English", () => {
 	for (const value of [undefined, null, "", "not-a-registered-locale", "pt-BR; Path=/", {}]) assert.equal(i18n.resolveLocale(value), "en");
 	assert.equal(i18n.resolveLocale("en"), "en");
