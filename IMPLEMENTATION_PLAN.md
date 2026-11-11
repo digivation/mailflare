@@ -8,18 +8,18 @@ Prepared on 2026-11-10 for `/home/matthew/Development/mailflare`, branch `ourfla
 
 ## Progress
 
-### Phase 0 — Node 26 baseline verified; supported-runtime baseline pending
+### Phase 0 — Node 22 Compose baseline established; Node 24 test target unresolved
 
 - Commit: `chore(plan): record implementation baseline`.
-- Runtime: Node `v26.13.0`, npm `12.2.2`; this is **not** the supported-runtime baseline. The test plan targets Node 24, while `Dockerfile:3` uses Node 22 for the self-hosted deployment. `npm ci` succeeded from the lockfile on Node 26. npm reported 35 dependency audit findings (1 low, 20 moderate, 11 high, 3 critical); install scripts were blocked by the configured npm policy.
-- `node --test tests/*.test.mjs`: exit 1, 567 tests, 556 pass, 9 fail, 2 skipped. Failures: two account-alias manager cases fail inserting `api_keys.prefix` (NOT NULL); six `manual-dns-checks.test.mjs` assertions fail; `layout-mail-search-provider.test.mjs` has asynchronous activity after test end and then cannot import its cleaned-up temp bundle. Re-running the DNS and layout test files separately reproduced those failures. The alias failures were also reproduced when run with that test file.
-- `npx tsc --noEmit --incremental false`: exit 2, existing errors in `src/app/page.tsx` (missing `calendarEnabled`/`driveEnabled`) and `src/lib/domains/resend-receiving.ts` (`status` absent from inferred type).
-- `npm run lint`: exit 1, numerous existing React Compiler/hooks and TypeScript lint errors across the source tree; also emitted warnings. A first concurrent lint run panicked while tests were creating temporary bundles; serial rerun completed and returned the source diagnostics.
-- `npm run build`: pass (Worker/vinext build). `npm run build:node`: pass (Next build and Node server bundle); Next skipped type validation per existing config.
+- Compose runtime: Node `v22.23.4`, npm `10.9.9`, based on `node:22-bookworm-slim` (Docker image digest `sha256:5ec23b7c622b00547753bc6ffd78085dd868a68aeb41c8e0a1418f033e13d96d`). `npm ci --ignore-scripts && npm rebuild better-sqlite3` succeeded in the Dockerfile dependency stage; npm reported 35 audit findings (1 low, 20 moderate, 11 high, 3 critical). Dockerfile's Node build stage (`npm run build:node`) passed.
+- `docker compose ... run ... node --test tests/*.test.mjs`: initially blocked because the Docker build stage lacks the `openssl` executable required by `tests/sns-signature.test.mjs`. Repeated in an ephemeral Compose container after installing `openssl` there (no repository/image change): exit 1, 568 tests, 558 pass, 8 fail, 2 skipped. Failures: two account-alias manager cases fail inserting `api_keys.prefix` (NOT NULL); six `manual-dns-checks.test.mjs` assertions fail. The Node 26-only layout bundle cleanup failure did not recur. Do not treat the missing `openssl` CLI as a source test failure; note the standard build image does not include it.
+- `npx tsc --noEmit --incremental false`: exit 2. Errors: `src/app/page.tsx` missing `calendarEnabled`/`driveEnabled`; `src/lib/domains/resend-receiving.ts` missing `status` on inferred MX type; `src/lib/jmap/identities.ts` unreachable `??` right operand; unresolved `@/lib/cloudflare` and `@/lib/jmap/handler` imports in `src/app/.well-known/jmap/route.ts`.
+- `npm run lint`: exit 1, 88 errors and 85 warnings across existing React Compiler/hooks, TypeScript and unused-import diagnostics.
+- `npm run build`: pass (Worker/vinext build) after unsetting Dockerfile's `MAILFLARE_RUNTIME=node` for this command. An initial run with that Node-only alias set failed with four missing Cloudflare runtime exports; it was not the Worker build configuration. `npm run build:node`: pass in the Docker build stage; Next skipped type validation per existing config.
 - Reviewed `tests/account-alias-selection.test.mjs`, `tests/manual-dns-checks.test.mjs`, `CLAUDE.md`, and the installed Next package. No Next `AGENTS.md` was present.
-- No application source changes. No database/provider smoke was run. Known baseline failures are recorded for comparison; do not fix unrelated defects in feature commits.
+- No application source changes. No database/provider smoke was run. Compare future checks to this Node 22 Compose baseline; do not fix unrelated defects in feature commits.
 
-**Unresolved / phase acceptance pending:** rerun baseline on the agreed supported runtime (reconcile Node 24 test target with Node 22 Docker runtime first). Until then, none of the Node 26 failures above may be treated as established deployment-runtime failures. Determine/repair the listed pre-existing test, type and lint failures separately from the licensing-removal work. Database engines and provider credentials were not checked.
+**Unresolved:** the plan says the tests target Node 24, but `Dockerfile:3` deploys Node 22. The baseline now represents the actual self-hosted Compose/Docker runtime; a separate Node 24 comparison remains pending until the project resolves which runtime the test target represents. The earlier Node 26 results are superseded for deployment-runtime comparisons. Database engines and provider credentials were not checked.
 
 ### Prepared patch: inspected, not applied
 
