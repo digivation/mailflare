@@ -32,6 +32,10 @@ test("fresh-install docs pin checkout and Cloudflare production branch to ourfla
   }
   assert.match(deployment, /select and verify `ourflare` as the production\/deployment branch/i);
   assert.match(readme, /select and verify `ourflare` as the production\/deployment branch/i);
+  const dockerQuickStart = readme.match(/### Self-host with Docker[\s\S]*?```bash\n([\s\S]*?)```/)?.[1];
+  assert.ok(dockerQuickStart, "README Docker quick start exists");
+  assert.match(dockerQuickStart, /git clone --branch ourflare --single-branch/);
+  assert.match(dockerQuickStart, /cd mailflare/);
 });
 
 test("updater release is offered to installations on 0.5.4", () => {

@@ -104,6 +104,8 @@ Token permissions and more options: [deployment guide](docs/deployment.md#deploy
 Runs as one container on any server, with SQLite and local files.
 
 ```bash
+git clone --branch ourflare --single-branch https://github.com/digivation/mailflare.git mailflare
+cd mailflare
 cp .env.docker.example .env.docker
 docker compose up -d --build
 ```

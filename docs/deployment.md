@@ -33,16 +33,21 @@ Paste only the token secret into the `CF_TOKEN` field in step 2. Do not include 
 
 ## Step 2: Deploy mailflare
 
-Do not use Cloudflare's one-click deploy button: its branch selection is not verified and may deploy the upstream `main` branch (the original 0.5.4 commercial build). Instead, clone `ourflare` locally and deploy that checkout, or use Cloudflare Git integration and explicitly select and verify `ourflare` as the production/deployment branch before the first build.
+Do not use Cloudflare's one-click deploy button: its branch selection is not verified and may deploy the repository's default `main` branch instead of `ourflare`. Instead, clone `ourflare` locally and deploy that checkout, or use Cloudflare Git integration and explicitly select and verify `ourflare` as the production/deployment branch before the first build.
 
 ```bash
 git clone --branch ourflare --single-branch https://github.com/digivation/mailflare.git mailflare
 cd mailflare
 npm install
+```
+
+Choose the Cloudflare account that owns your domain. Keep the Worker name exactly `mailflare`. Before deployment, configure the account-specific D1 database ID and D1, R2, and queue bindings in `wrangler.jsonc` as described below; do not commit account-specific IDs. Authenticate Wrangler using the scoped deployment token as `CLOUDFLARE_API_TOKEN` and set `CLOUDFLARE_ACCOUNT_ID` using your account ID (do not put tokens in commands or tracked files). Add runtime `CF_TOKEN` as a Worker secret; it is separate from the deployment API token. Then run:
+
+```bash
 npm run deploy
 ```
 
-Choose the Cloudflare account that owns your domain. Keep the Worker name exactly `mailflare`. Configure the D1, R2, and queue bindings as described below, and add runtime `CF_TOKEN` as a Worker secret; this is separate from the deployment API token. Wait for Cloudflare to finish deploying before opening `/setup`.
+Wait for Cloudflare to finish deploying before opening `/setup`.
 
 
 ### Optional Web Push configuration
