@@ -21,6 +21,24 @@ function createDb(withRetired = true) {
 	return sqlite;
 }
 
+function seedPreservedData(db) {
+	db.exec("UPDATE users SET forwarding_email='forward@example.test' WHERE id='sentinel'");
+	db.exec("INSERT INTO domains (id,user_id,hostname,zone_id,status,created_at) VALUES ('domain-1','sentinel','example.test','zone-1','active',1)");
+	db.exec("INSERT INTO mailboxes (id,user_id,domain_id,local_part,created_at) VALUES ('mailbox-1','sentinel','domain-1','shared',1)");
+	db.exec("INSERT INTO mailbox_access (id,mailbox_id,user_id,permission,created_by_user_id,created_at) VALUES ('grant-1','mailbox-1','sentinel','full_access','sentinel',1)");
+	db.exec("INSERT INTO routing_rules (id,user_id,domain_id,scope,pattern,match_value,action,forward_to,created_at) VALUES ('forward-rule','sentinel','domain-1','domain','*','*','forward','route@example.test',1)");
+	db.exec("UPDATE app_settings SET app_name='Branded Mail' WHERE id='default'");
+}
+
+function assertPreservedData(db) {
+	assert.deepEqual(db.prepare("SELECT forwarding_email FROM users WHERE id='sentinel'").get(), { forwarding_email: "forward@example.test" });
+	assert.deepEqual(db.prepare("SELECT hostname FROM domains WHERE id='domain-1'").get(), { hostname: "example.test" });
+	assert.deepEqual(db.prepare("SELECT local_part FROM mailboxes WHERE id='mailbox-1'").get(), { local_part: "shared" });
+	assert.deepEqual(db.prepare("SELECT permission FROM mailbox_access WHERE id='grant-1'").get(), { permission: "full_access" });
+	assert.deepEqual(db.prepare("SELECT app_name FROM app_settings WHERE id='default'").get(), { app_name: "Branded Mail" });
+	assert.deepEqual(db.prepare("SELECT forward_to FROM routing_rules WHERE id='forward-rule'").get(), { forward_to: "route@example.test" });
+}
+
 function handle(sqlite, sqlLog = []) {
 	return {
 		prepare(sql) {
@@ -51,11 +69,12 @@ test("current complete v2 exports omit retired metadata and restore on pre/post-
 });
 
 test("legacy v1 and v2 complete documents normalize retired rows and preserve legacy compatibility", async () => {
-	for (const preDrop of [true, false]) for (const version of [1, 2]) for (const included of [false, true]) {
+	for (const preDrop of [true, false]) for (const version of [1, 2]) for (const included of [false, true]) for (const retiredRows of [[], [{ plan: "ignored", seats: 99 }]]) {
 		const db = createDb(preDrop), sql = [], d1 = handle(db, sql);
+		seedPreservedData(db);
 		const current = JSON.parse(new TextDecoder().decode(await exportDatabaseRecords(d1)));
 		current.version = version;
-		current.tables.license_settings = [{ plan: "ignored", seats: 99 }];
+		current.tables.license_settings = retiredRows;
 		// Retain the old body-table path and omit v1's later optional Drive group.
 		current.tables.message_bodies = version === 1 ? [{ message_id: "legacy-message", text_body: "legacy body" }] : [];
 		if (version === 1) {
@@ -68,6 +87,7 @@ test("legacy v1 and v2 complete documents normalize retired rows and preserve le
 		if (included) current.includedTables.push("license_settings"); else delete current.includedTables;
 		await restore(d1, current);
 		assert.deepEqual(db.prepare("SELECT id,name FROM users").get(), { id: "sentinel", name: "Sentinel" });
+		assertPreservedData(db);
 		if (version === 1) assert.equal(db.prepare("SELECT text_body FROM messages WHERE id='legacy-message'").get().text_body, "legacy body");
 		assert.equal(sql.some((query) => /license_settings/i.test(query)), false);
 	}
